@@ -85,14 +85,14 @@ hover_overlay = [1.0, 1.0, 1.0, 0.1]
 [actions]
 # Commands for interactions with the Central Hub
 # Defaults:
-# left_click = "pavucontrol"
-# right_click = (none)
-# scroll_up = "pamixer -i 5"
-# scroll_down = "pamixer -d 5"
+left_click = "pwvucontrol"
+right_click = (none)
+scroll_up = "pamixer -i 5"
+scroll_down = "pamixer -d 5"
 
 # Example: Mute on click, Open mixer on right click
 left_click = "pamixer -t"
-right_click = "pavucontrol"
+right_click = "pwvucontrol"
 ```
 
 ## Usage

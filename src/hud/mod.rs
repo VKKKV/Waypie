@@ -88,7 +88,7 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
     let pos_state_init = wheel_pos.clone();
     let da_weak_init = drawing_area.downgrade();
     let window_weak_init = window.downgrade();
-    
+
     // Query cursor position after window is fully mapped
     window.connect_show(move |_| {
         // Get cursor position from seat/pointer
@@ -103,7 +103,7 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
             move_cursor_to_window_center(&w);
         }
     });
-    
+
     // Configurable refresh rate
     let da_weak = drawing_area.downgrade();
     let refresh_ms = config_rc.ui.refresh_rate_ms;
@@ -126,7 +126,7 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
     drawing_area.set_draw_func(move |_, context, width, height| {
         let w = width as f64;
         let h = height as f64;
-        
+
         // Use captured position or fallback to center
         let (center_x, center_y) = if let Some((px, py)) = *draw_pos.borrow() {
             (px, py)
@@ -135,7 +135,7 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
         };
 
         let now = Local::now();
-        let volume = get_volume(); 
+        let volume = get_volume();
         let current_hover = *draw_hover.borrow();
         let current_active = *draw_active.borrow();
         let current_hud_state = *draw_hud_state.borrow();
@@ -166,11 +166,11 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
 }
 
 fn draw_radial_wheel(
-    context: &gtk4::cairo::Context, 
-    cx: f64, 
-    cy: f64, 
-    config: &AppConfig, 
-    now: chrono::DateTime<Local>, 
+    context: &gtk4::cairo::Context,
+    cx: f64,
+    cy: f64,
+    config: &AppConfig,
+    now: chrono::DateTime<Local>,
     volume: f64,
     hover: HoverTarget,
     active_submenu: Option<usize>,
@@ -183,7 +183,7 @@ fn draw_radial_wheel(
     // 1. Background - clear the entire drawing area first
     context.set_source_rgba(0.0, 0.0, 0.0, 1.0);
     context.paint().expect("Failed to paint clear background");
-    
+
     // Draw the background wheel circle
     context.set_source_rgba(colors.background.0, colors.background.1, colors.background.2, colors.background.3);
     context.arc(cx, cy, ui.outer_radius, 0.0, 2.0 * PI);
@@ -239,7 +239,7 @@ fn draw_radial_wheel(
             let extents = context.text_extents(&item.label).unwrap();
             context.move_to(tx - extents.width() / 2.0, ty + extents.height() / 4.0);
             context.show_text(&item.label).unwrap();
-            
+
             // Separator
             context.set_source_rgb(0.0, 0.0, 0.0);
             context.set_line_width(2.0);
@@ -347,7 +347,7 @@ fn draw_radial_wheel(
 
     // 5. Center Info
     context.set_source_rgb(colors.text.0, colors.text.1, colors.text.2);
-    
+
     // Time
     let time_str = now.format("%H:%M").to_string();
     context.set_font_size(42.0);
@@ -372,38 +372,38 @@ fn draw_radial_wheel(
     // ─────────────────────────────────────────────────────────────
     // LAYER 2: TRAY BUTTON AT 6 O'CLOCK
     // ─────────────────────────────────────────────────────────────
-    
+
     // Draw tray button as a special segment at 6 o'clock (270°)
     let items_count = config.items.len();
     if items_count > 0 {
         let segment_angle = 2.0 * PI / (items_count + 1) as f64; // +1 for tray button
         let half_seg = segment_angle / 2.0;
         let tray_angle = 3.0 * PI / 2.0; // 270° = 3π/2
-        
+
         let start = tray_angle - half_seg;
         let end = tray_angle + half_seg;
-        
+
         // Draw tray button segment
         context.set_line_width(2.0);
         context.set_line_cap(gtk4::cairo::LineCap::Round);
-        
+
         // Highlight if hovering
         if hover == HoverTarget::TrayButton {
             context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
         } else {
             context.set_source_rgba(colors.tray_even.0, colors.tray_even.1, colors.tray_even.2, colors.tray_even.3);
         }
-        
+
         // Arc for tray button
         context.arc(cx, cy, ui.outer_radius - 10.0, start, end);
         context.stroke().unwrap();
-        
+
         // Tray icon label
         context.set_font_size(12.0);
         context.set_source_rgb(colors.text.0, colors.text.1, colors.text.2);
         let label = "⋮"; // Three dots icon
         let ext = context.text_extents(label).unwrap();
-        
+
         let label_radius = (ui.outer_radius + ui.tray_inner_radius) / 2.0;
         let label_x = cx + label_radius * tray_angle.cos();
         let label_y = cy + label_radius * tray_angle.sin();
@@ -414,7 +414,7 @@ fn draw_radial_wheel(
     // ─────────────────────────────────────────────────────────────
     // LAYER 3: CONDITIONAL OUTER RINGS
     // ─────────────────────────────────────────────────────────────
-    
+
     match hud_state {
         HudState::Idle => {
             // No outer ring in Idle state
@@ -447,18 +447,18 @@ fn draw_tray_apps_ring(
     if app_count == 0 {
         return;
     }
-    
+
     let segment_angle = 2.0 * PI / app_count as f64;
     let outer_start = ui.outer_radius + 20.0;  // More spacing from main ring
     let outer_end = ui.outer_radius + 100.0;   // Further outer ring
     let icon_radius = (outer_start + outer_end) / 2.0; // Icons in the middle
-    
+
     context.set_line_width(2.0);
     context.set_line_cap(gtk4::cairo::LineCap::Round);
-    
+
     for (i, item) in items.iter().enumerate() {
         let angle = (i as f64) * segment_angle;
-        
+
         // Draw segment background
         let is_hovered = hover == HoverTarget::OuterRingItem(i);
         if is_hovered {
@@ -468,23 +468,23 @@ fn draw_tray_apps_ring(
         } else {
             context.set_source_rgba(colors.tray_odd.0, colors.tray_odd.1, colors.tray_odd.2, colors.tray_odd.3);
         }
-        
+
         let start = angle;
         let end = angle + segment_angle;
         context.arc(cx, cy, outer_start + 10.0, start, end);
         context.stroke().unwrap();
-        
+
         // Calculate icon position
         let label_angle = angle + segment_angle / 2.0;
         let icon_x = cx + icon_radius * label_angle.cos();
         let icon_y = cy + icon_radius * label_angle.sin();
-        
+
         // Try to render system icon, fallback to label text
         if !render_icon(context, &item.icon_name, icon_x, icon_y, 32) {
             // Fallback: render text label with title
             context.set_font_size(11.0);
             context.set_source_rgb(colors.text.0, colors.text.1, colors.text.2);
-            
+
             let ext = context.text_extents(&item.title).unwrap();
             context.move_to(icon_x - ext.width() / 2.0, icon_y + ext.height() / 2.0);
             context.show_text(&item.title).unwrap();
@@ -506,18 +506,18 @@ fn draw_context_menu_ring(
     if action_count == 0 {
         return;
     }
-    
+
     let segment_angle = 2.0 * PI / action_count as f64;
     let outer_start = ui.outer_radius + 20.0;  // More spacing from main ring
     let outer_end = ui.outer_radius + 100.0;   // Further outer ring
     let text_radius = (outer_start + outer_end) / 2.0; // Labels in the middle
-    
+
     context.set_line_width(2.0);
     context.set_line_cap(gtk4::cairo::LineCap::Round);
-    
+
     for (i, action) in app.actions.iter().enumerate() {
         let angle = (i as f64) * segment_angle;
-        
+
         // Draw segment background
         let is_hovered = hover == HoverTarget::OuterRingItem(i);
         if is_hovered {
@@ -527,20 +527,20 @@ fn draw_context_menu_ring(
         } else {
             context.set_source_rgba(colors.tray_odd.0, colors.tray_odd.1, colors.tray_odd.2, colors.tray_odd.3);
         }
-        
+
         let start = angle;
         let end = angle + segment_angle;
         context.arc(cx, cy, outer_start + 10.0, start, end);
         context.stroke().unwrap();
-        
+
         // Draw label at segment position
         context.set_font_size(11.0);
         context.set_source_rgb(colors.text.0, colors.text.1, colors.text.2);
-        
+
         let label_angle = angle + segment_angle / 2.0;
         let label_x = cx + text_radius * label_angle.cos();
         let label_y = cy + text_radius * label_angle.sin();
-        
+
         let ext = context.text_extents(&action.label).unwrap();
         context.move_to(label_x - ext.width() / 2.0, label_y + ext.height() / 2.0);
         context.show_text(&action.label).unwrap();
@@ -559,27 +559,27 @@ fn render_icon(
     if icon_name.is_empty() {
         return false;
     }
-    
+
     // Try to load pixbuf from standard icon paths
     if let Some(pixbuf) = load_pixbuf_from_paths(icon_name, size) {
         // Save context state
         context.save().unwrap();
-        
+
         let px_width = pixbuf.width() as f64;
         let px_height = pixbuf.height() as f64;
-        
+
         // Center the icon accounting for its actual dimensions
         context.translate(x - (px_width / 2.0), y - (px_height / 2.0));
-        
+
         // Render the pixbuf directly
         if render_pixbuf_on_cairo(context, &pixbuf).is_ok() {
             context.restore().unwrap();
             return true;
         }
-        
+
         context.restore().unwrap();
     }
-    
+
     false
 }
 
@@ -591,7 +591,7 @@ fn render_pixbuf_on_cairo(
     let width = pixbuf.width();
     let height = pixbuf.height();
     let rowstride = pixbuf.rowstride() as usize;
-    
+
     // Get pixel data from pixbuf
     if let Some(pixel_bytes) = pixbuf.pixel_bytes() {
         let pixels = pixel_bytes.as_ref();
@@ -600,7 +600,7 @@ fn render_pixbuf_on_cairo(
         } else {
             gtk4::cairo::Format::Rgb24
         };
-        
+
         // Create surface from pixbuf data
         let surface = gtk4::cairo::ImageSurface::create_for_data(
             pixels.to_vec(),
@@ -609,7 +609,7 @@ fn render_pixbuf_on_cairo(
             height,
             rowstride as i32,
         )?;
-        
+
         context.set_source_surface(&surface, 0.0, 0.0)?;
         context.paint()?;
         Ok(())
@@ -621,7 +621,7 @@ fn render_pixbuf_on_cairo(
 /// Try to load a pixbuf from standard icon paths
 fn load_pixbuf_from_paths(icon_name: &str, size: i32) -> Option<Pixbuf> {
     let home = std::env::var("HOME").ok()?;
-    
+
     // Try different standard icon locations
     let paths = vec![
         format!("{home}/.icons/hicolor/{size}/apps/{icon_name}.png"),
@@ -633,7 +633,7 @@ fn load_pixbuf_from_paths(icon_name: &str, size: i32) -> Option<Pixbuf> {
         format!("/usr/share/pixmaps/{icon_name}.png"),
         format!("/usr/share/pixmaps/{icon_name}.svg"),
     ];
-    
+
     for path in paths {
         if let Ok(pixbuf) = Pixbuf::from_file(&path) {
             // Scale preserving aspect ratio if needed
@@ -650,20 +650,20 @@ fn load_pixbuf_from_paths(icon_name: &str, size: i32) -> Option<Pixbuf> {
             return Some(pixbuf);
         }
     }
-    
+
     None
 }
 
 fn setup_click_handler(
-    drawing_area: &DrawingArea, 
-    config: Rc<AppConfig>, 
+    drawing_area: &DrawingArea,
+    config: Rc<AppConfig>,
     wheel_pos: Rc<RefCell<Option<(f64, f64)>>>,
     hud_state: Rc<RefCell<HudState>>,
     sni_items: crate::sni_watcher::TrayItems,
 ) {
     let click = GestureClick::new();
-    click.set_button(0); 
-    
+    click.set_button(0);
+
     let click_cfg = config.clone();
     let pos_state = wheel_pos.clone();
     let state_rc = hud_state.clone();
@@ -671,22 +671,22 @@ fn setup_click_handler(
 
     click.connect_pressed(move |gesture, _, x, y| {
         let ui = &click_cfg.ui;
-        
+
         let widget = gesture.widget().unwrap();
         let w = widget.width() as f64;
         let h = widget.height() as f64;
-        
+
         let (center_x, center_y) = if let Some((px, py)) = *pos_state.borrow() {
             (px, py)
         } else {
             (w / 2.0, h / 2.0)
         };
-        
+
         // Use polar coordinate hit detection
         let (radius, theta) = cartesian_to_polar(x, y, center_x, center_y);
         let button = gesture.current_button();
         let mut state = state_rc.borrow_mut();
-        
+
         if button != gtk4::gdk::BUTTON_PRIMARY {
             return; // Only handle left-click for state transitions
         }
@@ -727,14 +727,14 @@ fn setup_click_handler(
                 // Detect hit in tray state
                 let items = sni_items.lock().unwrap();
                 let item_count = items.len();
-                
+
                 let hit = if radius < ui.tray_inner_radius {
                     // Click on center closes tray
                     HitResult::Center
                 } else {
                     detect_hit_tray_ring(radius, theta, ui, item_count)
                 };
-                
+
                 match hit {
                     HitResult::Center => {
                         // Close tray, return to idle
@@ -751,7 +751,7 @@ fn setup_click_handler(
                                 let path = item.path.clone();
                                 drop(state);
                                 drop(items);
-                                
+
                                 // Spawn async activation
                                 tokio::spawn(async move {
                                     if let Err(e) = crate::sni_watcher::activate_item(&service, &path, center_x as i32, center_y as i32).await {
@@ -760,7 +760,7 @@ fn setup_click_handler(
                                         }
                                     }
                                 });
-                                
+
                                 if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
                             } else {
                                 drop(items);
@@ -798,7 +798,7 @@ fn setup_click_handler(
             }
         }
     });
-    
+
     drawing_area.add_controller(click);
 }
 
@@ -818,13 +818,13 @@ fn setup_scroll_handler(drawing_area: &DrawingArea, config: Rc<AppConfig>) {
         }
         gtk4::glib::Propagation::Stop
     });
-    
+
     drawing_area.add_controller(scroll);
 }
 
 fn setup_hover_handler(
-    drawing_area: &DrawingArea, 
-    config: Rc<AppConfig>, 
+    drawing_area: &DrawingArea,
+    config: Rc<AppConfig>,
     hover_state: Rc<RefCell<HoverTarget>>,
     hud_state: Rc<RefCell<HudState>>,
     wheel_pos: Rc<RefCell<Option<(f64, f64)>>>
@@ -846,16 +846,16 @@ fn setup_hover_handler(
         };
         let w = widget.width() as f64;
         let h = widget.height() as f64;
-        
+
         let (center_x, center_y) = if let Some((px, py)) = *pos_state.borrow() {
             (px, py)
         } else {
             (w / 2.0, h / 2.0)
         };
-        
+
         // Use polar coordinates
         let (radius, theta) = cartesian_to_polar(x, y, center_x, center_y);
-        
+
         let mut new_target = HoverTarget::None;
         let current_state = hud_rc.borrow();
 
@@ -949,7 +949,7 @@ fn detect_wayland_compositor() -> &'static str {
 /// Tries compositor-specific methods with fallback to screen center
 fn get_cursor_position() -> Option<(f64, f64)> {
     let compositor = detect_wayland_compositor();
-    
+
     match compositor {
         "hyprland" => get_cursor_position_hyprland(),
         "sway" => get_cursor_position_sway(),
@@ -995,7 +995,7 @@ fn get_cursor_position_sway() -> Option<(f64, f64)> {
 /// Tries compositor-specific methods with fallback
 fn move_cursor_to_window_center(_window: &ApplicationWindow) {
     let compositor = detect_wayland_compositor();
-    
+
     match compositor {
         "hyprland" => {
             // Hyprland: query current screen size and move to center
@@ -1003,7 +1003,7 @@ fn move_cursor_to_window_center(_window: &ApplicationWindow) {
             if let Some((screen_width, screen_height)) = get_screen_dimensions() {
                 let center_x = screen_width / 2;
                 let center_y = screen_height / 2;
-                
+
                 let _ = Command::new("hyprctl")
                     .args(&[
                         "dispatch",
@@ -1032,20 +1032,20 @@ fn get_screen_dimensions() -> Option<(i32, i32)> {
 
     if let Ok(output) = output {
         let s = String::from_utf8_lossy(&output.stdout);
-        
+
         // Simple JSON parsing: look for first monitor's width and height
         // Format: "width": 3840, "height": 2160
         let lines: Vec<&str> = s.lines().collect();
         let mut width: Option<i32> = None;
         let mut height: Option<i32> = None;
-        
+
         for line in lines {
             if width.is_none() && line.contains("\"width\"") {
                 width = extract_json_number(line);
             } else if height.is_none() && line.contains("\"height\"") {
                 height = extract_json_number(line);
             }
-            
+
             // We found both, return
             if let (Some(w), Some(h)) = (width, height) {
                 return Some((w, h));
@@ -1077,19 +1077,19 @@ fn extract_json_number(line: &str) -> Option<i32> {
 fn cartesian_to_polar(x: f64, y: f64, center_x: f64, center_y: f64) -> (f64, f64) {
     let dx = x - center_x;
     let dy = y - center_y;
-    
+
     let radius = (dx * dx + dy * dy).sqrt();
-    
+
     // atan2(dy, dx) returns radians in range [-π, π]
     // We convert to degrees in range [0, 360)
     let theta_rad = dy.atan2(dx);
     let mut theta_deg = theta_rad.to_degrees();
-    
+
     // Normalize to [0, 360) range, handling wrapping at 0-degree line
     if theta_deg < 0.0 {
         theta_deg += 360.0;
     }
-    
+
     (radius, theta_deg)
 }
 
@@ -1106,12 +1106,12 @@ fn detect_hit(
 ) -> HitResult {
     let (radius, theta) = cartesian_to_polar(x, y, center_x, center_y);
     let ui = &config.ui;
-    
+
     // Check center (always hittable for back/close)
     if radius < 40.0 {
         return HitResult::Center;
     }
-    
+
     match state {
         HudState::Idle => {
             // In Idle state: check for main ring items + tray button
@@ -1140,42 +1140,42 @@ fn detect_hit_main_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, i
     if item_count == 0 {
         return HitResult::None;
     }
-    
+
     let segment_angle = 360.0 / (item_count as f64 + 1.0); // +1 for tray button
     let half_segment = segment_angle / 2.0;
-    
+
     // Check if in radial range
     if radius < ui.tray_inner_radius || radius > ui.outer_radius {
         return HitResult::None;
     }
-    
+
     // Tray button at 270° (6 o'clock)
     let tray_start = 270.0 - half_segment;
     let tray_end = 270.0 + half_segment;
-    
-    if (theta >= tray_start && theta <= tray_end) || 
+
+    if (theta >= tray_start && theta <= tray_end) ||
        (tray_start < 0.0 && (theta >= tray_start + 360.0 || theta <= tray_end)) {
         return HitResult::TrayButton;
     }
-    
+
     // Check main ring items (skip tray button slot at 270°)
     for i in 0..item_count {
         let item_angle = (i as f64 * segment_angle) + segment_angle / 2.0;
         let item_start = item_angle - half_segment;
         let item_end = item_angle + half_segment;
-        
+
         // Skip the tray button slot
         if (item_start..item_end).contains(&270.0) {
             continue;
         }
-        
+
         if (theta >= item_start && theta <= item_end) ||
            (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end)) ||
            (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0)) {
             return HitResult::RingItem(i);
         }
     }
-    
+
     HitResult::None
 }
 
@@ -1185,30 +1185,30 @@ fn detect_hit_tray_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, a
     if app_count == 0 {
         return HitResult::None;
     }
-    
+
     // Outer ring with new spacing
     let outer_start = ui.outer_radius + 20.0;
     let outer_end = ui.outer_radius + 100.0;
-    
+
     if radius < outer_start || radius > outer_end {
         return HitResult::None;
     }
-    
+
     let segment_angle = 360.0 / app_count as f64;
     let half_segment = segment_angle / 2.0;
-    
+
     for i in 0..app_count {
         let item_angle = (i as f64 * segment_angle) + segment_angle / 2.0;
         let item_start = item_angle - half_segment;
         let item_end = item_angle + half_segment;
-        
+
         if (theta >= item_start && theta <= item_end) ||
            (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end)) ||
            (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0)) {
             return HitResult::OuterRingItem(i);
         }
     }
-    
+
     HitResult::None
 }
 
@@ -1218,29 +1218,29 @@ fn detect_hit_context_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig
     if action_count == 0 {
         return HitResult::None;
     }
-    
+
     // Context ring uses outer ring space with new spacing
     let outer_start = ui.outer_radius + 20.0;
     let outer_end = ui.outer_radius + 100.0;
-    
+
     if radius < outer_start || radius > outer_end {
         return HitResult::None;
     }
-    
+
     let segment_angle = 360.0 / action_count as f64;
     let half_segment = segment_angle / 2.0;
-    
+
     for i in 0..action_count {
         let item_angle = (i as f64 * segment_angle) + segment_angle / 2.0;
         let item_start = item_angle - half_segment;
         let item_end = item_angle + half_segment;
-        
+
         if (theta >= item_start && theta <= item_end) ||
            (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end)) ||
            (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0)) {
             return HitResult::ContextMenuItem(i);
         }
     }
-    
+
     HitResult::None
 }

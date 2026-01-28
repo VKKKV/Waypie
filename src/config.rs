@@ -155,7 +155,7 @@ fn default_tray_even() -> (f64, f64, f64, f64) { (0.15, 0.15, 0.15, 0.9) }
 fn default_tray_odd() -> (f64, f64, f64, f64) { (0.2, 0.2, 0.2, 0.9) }
 fn default_hover_overlay() -> (f64, f64, f64, f64) { (1.0, 1.0, 1.0, 0.1) } // White 10% opacity
 
-fn default_action_left_click() -> Option<String> { Some("pavucontrol".to_string()) } // Default: open volume control
+fn default_action_left_click() -> Option<String> { Some("pwvucontrol".to_string()) } // Default: open volume control
 fn default_action_right_click() -> Option<String> { None }
 fn default_action_scroll_up() -> Option<String> { Some("pamixer -i 5".to_string()) }
 fn default_action_scroll_down() -> Option<String> { Some("pamixer -d 5".to_string()) }
