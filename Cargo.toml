@@ -1,0 +1,16 @@
+[package]
+name = "waypie"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cairo = "0.0.4"
+chrono = "0.4.43"
+gtk4 = "0.10.3"
+gtk4-layer-shell = "0.7.1"
+ksni = { version = "0.3.3", features = ["blocking"] }
+serde = { version = "1.0.228", features = ["derive"] }
+system_shutdown = "4.1.0"
+tokio = { version = "1.49.0", features = ["full"] }
+toml = "0.9.11"
+xdg = "3.0.0"
