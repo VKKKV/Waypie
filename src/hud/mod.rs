@@ -1,21 +1,24 @@
-use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, DrawingArea, GestureClick, EventControllerScroll, EventControllerScrollFlags, EventControllerMotion};
-use gtk4_layer_shell::{Edge, Layer, LayerShell};
-use gtk4::glib;
-use gdk_pixbuf::Pixbuf;
-use chrono::Local;
-use std::f64::consts::PI;
-use std::time::Duration;
-use std::process::Command;
-use std::rc::Rc;
-use std::cell::RefCell;
 use crate::config::AppConfig;
 use crate::utils::execute_command;
+use chrono::Local;
+use gdk_pixbuf::Pixbuf;
+use gtk4::glib;
+use gtk4::prelude::*;
+use gtk4::{
+    Application, ApplicationWindow, DrawingArea, EventControllerMotion, EventControllerScroll,
+    EventControllerScrollFlags, GestureClick,
+};
+use gtk4_layer_shell::{Edge, Layer, LayerShell};
+use std::cell::RefCell;
+use std::f64::consts::PI;
+use std::process::Command;
+use std::rc::Rc;
+use std::time::Duration;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum HudState {
-    Idle,              // Normal wheel with center hub + ring
-    TrayActive,        // Outer ring showing tray apps
+    Idle,       // Normal wheel with center hub + ring
+    TrayActive, // Outer ring showing tray apps
     #[allow(dead_code)]
     ContextActive(usize), // Context ring for tray app at index
 }
@@ -40,9 +43,7 @@ enum HitResult {
 }
 
 pub fn run(app_id: &str, config: AppConfig, sni_items: crate::sni_watcher::TrayItems) {
-    let app = Application::builder()
-        .application_id(app_id)
-        .build();
+    let app = Application::builder().application_id(app_id).build();
 
     app.connect_activate(move |app| build_ui(app, config.clone(), sni_items.clone()));
     app.run_with_args(&Vec::<String>::new());
@@ -51,8 +52,8 @@ pub fn run(app_id: &str, config: AppConfig, sni_items: crate::sni_watcher::TrayI
 fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher::TrayItems) {
     let window = ApplicationWindow::builder()
         .application(app)
-        // .default_width(config.ui.width) // No longer needed for positioning
-        // .default_height(config.ui.height)
+        .default_width(config.ui.width) // No longer needed for positioning
+        .default_height(config.ui.height)
         .build();
 
     // Wayland layer shell integration (required for fullscreen overlay positioning)
@@ -83,26 +84,6 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
     let active_submenu = Rc::new(RefCell::new(Option::<usize>::None));
     let wheel_pos = Rc::new(RefCell::new(Option::<(f64, f64)>::None));
     let hud_state = Rc::new(RefCell::new(HudState::Idle));
-
-    // Capture initial cursor position when window is realized
-    let pos_state_init = wheel_pos.clone();
-    let da_weak_init = drawing_area.downgrade();
-    let window_weak_init = window.downgrade();
-
-    // Query cursor position after window is fully mapped
-    window.connect_show(move |_| {
-        // Get cursor position from seat/pointer
-        if let Some(pos) = get_cursor_position() {
-            *pos_state_init.borrow_mut() = Some(pos);
-            if let Some(da) = da_weak_init.upgrade() {
-                da.queue_draw();
-            }
-        }
-        // Move cursor to wheel center after position is captured
-        if let Some(w) = window_weak_init.upgrade() {
-            move_cursor_to_window_center(&w);
-        }
-    });
 
     // Configurable refresh rate
     let da_weak = drawing_area.downgrade();
@@ -140,7 +121,18 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
         let current_active = *draw_active.borrow();
         let current_hud_state = *draw_hud_state.borrow();
 
-        draw_radial_wheel(context, center_x, center_y, &draw_config, now, volume, current_hover, current_active, current_hud_state, draw_sni_items.clone());
+        draw_radial_wheel(
+            context,
+            center_x,
+            center_y,
+            &draw_config,
+            now,
+            volume,
+            current_hover,
+            current_active,
+            current_hud_state,
+            draw_sni_items.clone(),
+        );
     });
 
     // Periodic redraw timer for SNI updates (every 500ms)
@@ -155,11 +147,23 @@ fn build_ui(app: &Application, config: AppConfig, sni_items: crate::sni_watcher:
     });
 
     // Interaction (Click)
-    setup_click_handler(&drawing_area, config_rc.clone(), wheel_pos.clone(), hud_state.clone(), sni_items.clone());
+    setup_click_handler(
+        &drawing_area,
+        config_rc.clone(),
+        wheel_pos.clone(),
+        hud_state.clone(),
+        sni_items.clone(),
+    );
     // Interaction (Scroll)
     setup_scroll_handler(&drawing_area, config_rc.clone());
     // Interaction (Hover)
-    setup_hover_handler(&drawing_area, config_rc.clone(), hover_state, hud_state.clone(), wheel_pos.clone());
+    setup_hover_handler(
+        &drawing_area,
+        config_rc.clone(),
+        hover_state,
+        hud_state.clone(),
+        wheel_pos.clone(),
+    );
 
     window.set_child(Some(&drawing_area));
     window.present();
@@ -181,11 +185,16 @@ fn draw_radial_wheel(
     let colors = &ui.colors;
 
     // 1. Background - clear the entire drawing area first
-    context.set_source_rgba(0.0, 0.0, 0.0, 1.0);
+    context.set_source_rgba(0.0, 0.0, 0.0, 0.1);
     context.paint().expect("Failed to paint clear background");
 
     // Draw the background wheel circle
-    context.set_source_rgba(colors.background.0, colors.background.1, colors.background.2, colors.background.3);
+    context.set_source_rgba(
+        colors.background.0,
+        colors.background.1,
+        colors.background.2,
+        colors.background.3,
+    );
     context.arc(cx, cy, ui.outer_radius, 0.0, 2.0 * PI);
     context.fill().expect("Failed to fill bg");
 
@@ -201,9 +210,19 @@ fn draw_radial_wheel(
 
             // Segment Colors
             if i % 2 == 0 {
-                context.set_source_rgba(colors.tray_even.0, colors.tray_even.1, colors.tray_even.2, colors.tray_even.3);
+                context.set_source_rgba(
+                    colors.tray_even.0,
+                    colors.tray_even.1,
+                    colors.tray_even.2,
+                    colors.tray_even.3,
+                );
             } else {
-                context.set_source_rgba(colors.tray_odd.0, colors.tray_odd.1, colors.tray_odd.2, colors.tray_odd.3);
+                context.set_source_rgba(
+                    colors.tray_odd.0,
+                    colors.tray_odd.1,
+                    colors.tray_odd.2,
+                    colors.tray_odd.3,
+                );
             }
 
             // Draw Segment
@@ -217,7 +236,12 @@ fn draw_radial_wheel(
             if ui.hover_mode == "highlight" {
                 if let HoverTarget::RingItem(h_idx) = hover {
                     if h_idx == i {
-                        context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
+                        context.set_source_rgba(
+                            colors.hover_overlay.0,
+                            colors.hover_overlay.1,
+                            colors.hover_overlay.2,
+                            colors.hover_overlay.3,
+                        );
                         context.new_path();
                         context.arc(cx, cy, ui.outer_radius, start_angle, end_angle);
                         context.arc_negative(cx, cy, ui.tray_inner_radius, end_angle, start_angle);
@@ -234,7 +258,11 @@ fn draw_radial_wheel(
             let ty = cy + text_radius * mid_angle.sin();
 
             context.set_source_rgb(colors.text.0, colors.text.1, colors.text.2);
-            context.select_font_face(&ui.font_family, gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
+            context.select_font_face(
+                &ui.font_family,
+                gtk4::cairo::FontSlant::Normal,
+                gtk4::cairo::FontWeight::Bold,
+            );
             context.set_font_size(13.0);
             let extents = context.text_extents(&item.label).unwrap();
             context.move_to(tx - extents.width() / 2.0, ty + extents.height() / 4.0);
@@ -243,8 +271,14 @@ fn draw_radial_wheel(
             // Separator
             context.set_source_rgb(0.0, 0.0, 0.0);
             context.set_line_width(2.0);
-            context.move_to(cx + ui.tray_inner_radius * start_angle.cos(), cy + ui.tray_inner_radius * start_angle.sin());
-            context.line_to(cx + ui.outer_radius * start_angle.cos(), cy + ui.outer_radius * start_angle.sin());
+            context.move_to(
+                cx + ui.tray_inner_radius * start_angle.cos(),
+                cy + ui.tray_inner_radius * start_angle.sin(),
+            );
+            context.line_to(
+                cx + ui.outer_radius * start_angle.cos(),
+                cy + ui.outer_radius * start_angle.sin(),
+            );
             context.stroke().unwrap();
         }
     }
@@ -267,9 +301,19 @@ fn draw_radial_wheel(
 
                     // Reuse colors but slightly different
                     if i % 2 == 0 {
-                         context.set_source_rgba(colors.tray_even.0, colors.tray_even.1, colors.tray_even.2, colors.tray_even.3);
+                        context.set_source_rgba(
+                            colors.tray_even.0,
+                            colors.tray_even.1,
+                            colors.tray_even.2,
+                            colors.tray_even.3,
+                        );
                     } else {
-                         context.set_source_rgba(colors.tray_odd.0, colors.tray_odd.1, colors.tray_odd.2, colors.tray_odd.3);
+                        context.set_source_rgba(
+                            colors.tray_odd.0,
+                            colors.tray_odd.1,
+                            colors.tray_odd.2,
+                            colors.tray_odd.3,
+                        );
                     }
 
                     context.new_path();
@@ -282,24 +326,39 @@ fn draw_radial_wheel(
                     if ui.hover_mode == "highlight" {
                         if let HoverTarget::OuterRingItem(h_idx) = hover {
                             if h_idx == i {
-                                context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
+                                context.set_source_rgba(
+                                    colors.hover_overlay.0,
+                                    colors.hover_overlay.1,
+                                    colors.hover_overlay.2,
+                                    colors.hover_overlay.3,
+                                );
                                 context.new_path();
                                 context.arc(cx, cy, sub_outer_radius, start_angle, end_angle);
-                                context.arc_negative(cx, cy, sub_inner_radius, end_angle, start_angle);
+                                context.arc_negative(
+                                    cx,
+                                    cy,
+                                    sub_inner_radius,
+                                    end_angle,
+                                    start_angle,
+                                );
                                 context.close_path();
                                 context.fill().unwrap();
                             }
                         }
                     }
 
-                     // Label
+                    // Label
                     let mid_angle = start_angle + (angle_per_sub / 2.0);
                     let text_radius = (sub_outer_radius + sub_inner_radius) / 2.0;
                     let tx = cx + text_radius * mid_angle.cos();
                     let ty = cy + text_radius * mid_angle.sin();
 
                     context.set_source_rgb(colors.text.0, colors.text.1, colors.text.2);
-                    context.select_font_face(&ui.font_family, gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
+                    context.select_font_face(
+                        &ui.font_family,
+                        gtk4::cairo::FontSlant::Normal,
+                        gtk4::cairo::FontWeight::Bold,
+                    );
                     context.set_font_size(12.0);
                     let extents = context.text_extents(&item.label).unwrap();
                     context.move_to(tx - extents.width() / 2.0, ty + extents.height() / 4.0);
@@ -308,8 +367,14 @@ fn draw_radial_wheel(
                     // Separator
                     context.set_source_rgb(0.0, 0.0, 0.0);
                     context.set_line_width(2.0);
-                    context.move_to(cx + sub_inner_radius * start_angle.cos(), cy + sub_inner_radius * start_angle.sin());
-                    context.line_to(cx + sub_outer_radius * start_angle.cos(), cy + sub_outer_radius * start_angle.sin());
+                    context.move_to(
+                        cx + sub_inner_radius * start_angle.cos(),
+                        cy + sub_inner_radius * start_angle.sin(),
+                    );
+                    context.line_to(
+                        cx + sub_outer_radius * start_angle.cos(),
+                        cy + sub_outer_radius * start_angle.sin(),
+                    );
                     context.stroke().unwrap();
                 }
             }
@@ -318,7 +383,12 @@ fn draw_radial_wheel(
 
     // Hover Effect for Center
     if ui.hover_mode == "highlight" && hover == HoverTarget::Center {
-        context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
+        context.set_source_rgba(
+            colors.hover_overlay.0,
+            colors.hover_overlay.1,
+            colors.hover_overlay.2,
+            colors.hover_overlay.3,
+        );
         context.new_path();
         context.arc(cx, cy, ui.tray_inner_radius, 0.0, 2.0 * PI);
         context.fill().unwrap();
@@ -326,7 +396,12 @@ fn draw_radial_wheel(
 
     // 4. Volume Arc (Inner Ring)
     // Track
-    context.set_source_rgba(colors.volume_track.0, colors.volume_track.1, colors.volume_track.2, colors.volume_track.3);
+    context.set_source_rgba(
+        colors.volume_track.0,
+        colors.volume_track.1,
+        colors.volume_track.2,
+        colors.volume_track.3,
+    );
     context.set_line_width(8.0);
     context.set_line_cap(gtk4::cairo::LineCap::Round);
     context.arc(cx, cy, ui.vol_radius, 0.0, 2.0 * PI);
@@ -334,9 +409,17 @@ fn draw_radial_wheel(
 
     // Active Level
     if volume > 0.8 {
-        context.set_source_rgb(colors.volume_warning.0, colors.volume_warning.1, colors.volume_warning.2);
+        context.set_source_rgb(
+            colors.volume_warning.0,
+            colors.volume_warning.1,
+            colors.volume_warning.2,
+        );
     } else {
-        context.set_source_rgb(colors.volume_arc.0, colors.volume_arc.1, colors.volume_arc.2);
+        context.set_source_rgb(
+            colors.volume_arc.0,
+            colors.volume_arc.1,
+            colors.volume_arc.2,
+        );
     }
 
     let vol_angle = volume * 2.0 * PI;
@@ -389,9 +472,19 @@ fn draw_radial_wheel(
 
         // Highlight if hovering
         if hover == HoverTarget::TrayButton {
-            context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
+            context.set_source_rgba(
+                colors.hover_overlay.0,
+                colors.hover_overlay.1,
+                colors.hover_overlay.2,
+                colors.hover_overlay.3,
+            );
         } else {
-            context.set_source_rgba(colors.tray_even.0, colors.tray_even.1, colors.tray_even.2, colors.tray_even.3);
+            context.set_source_rgba(
+                colors.tray_even.0,
+                colors.tray_even.1,
+                colors.tray_even.2,
+                colors.tray_even.3,
+            );
         }
 
         // Arc for tray button
@@ -449,8 +542,8 @@ fn draw_tray_apps_ring(
     }
 
     let segment_angle = 2.0 * PI / app_count as f64;
-    let outer_start = ui.outer_radius + 20.0;  // More spacing from main ring
-    let outer_end = ui.outer_radius + 100.0;   // Further outer ring
+    let outer_start = ui.outer_radius + 20.0; // More spacing from main ring
+    let outer_end = ui.outer_radius + 100.0; // Further outer ring
     let icon_radius = (outer_start + outer_end) / 2.0; // Icons in the middle
 
     context.set_line_width(2.0);
@@ -462,11 +555,26 @@ fn draw_tray_apps_ring(
         // Draw segment background
         let is_hovered = hover == HoverTarget::OuterRingItem(i);
         if is_hovered {
-            context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
+            context.set_source_rgba(
+                colors.hover_overlay.0,
+                colors.hover_overlay.1,
+                colors.hover_overlay.2,
+                colors.hover_overlay.3,
+            );
         } else if i % 2 == 0 {
-            context.set_source_rgba(colors.tray_even.0, colors.tray_even.1, colors.tray_even.2, colors.tray_even.3);
+            context.set_source_rgba(
+                colors.tray_even.0,
+                colors.tray_even.1,
+                colors.tray_even.2,
+                colors.tray_even.3,
+            );
         } else {
-            context.set_source_rgba(colors.tray_odd.0, colors.tray_odd.1, colors.tray_odd.2, colors.tray_odd.3);
+            context.set_source_rgba(
+                colors.tray_odd.0,
+                colors.tray_odd.1,
+                colors.tray_odd.2,
+                colors.tray_odd.3,
+            );
         }
 
         let start = angle;
@@ -508,8 +616,8 @@ fn draw_context_menu_ring(
     }
 
     let segment_angle = 2.0 * PI / action_count as f64;
-    let outer_start = ui.outer_radius + 20.0;  // More spacing from main ring
-    let outer_end = ui.outer_radius + 100.0;   // Further outer ring
+    let outer_start = ui.outer_radius + 20.0; // More spacing from main ring
+    let outer_end = ui.outer_radius + 100.0; // Further outer ring
     let text_radius = (outer_start + outer_end) / 2.0; // Labels in the middle
 
     context.set_line_width(2.0);
@@ -521,11 +629,26 @@ fn draw_context_menu_ring(
         // Draw segment background
         let is_hovered = hover == HoverTarget::OuterRingItem(i);
         if is_hovered {
-            context.set_source_rgba(colors.hover_overlay.0, colors.hover_overlay.1, colors.hover_overlay.2, colors.hover_overlay.3);
+            context.set_source_rgba(
+                colors.hover_overlay.0,
+                colors.hover_overlay.1,
+                colors.hover_overlay.2,
+                colors.hover_overlay.3,
+            );
         } else if i % 2 == 0 {
-            context.set_source_rgba(colors.tray_even.0, colors.tray_even.1, colors.tray_even.2, colors.tray_even.3);
+            context.set_source_rgba(
+                colors.tray_even.0,
+                colors.tray_even.1,
+                colors.tray_even.2,
+                colors.tray_even.3,
+            );
         } else {
-            context.set_source_rgba(colors.tray_odd.0, colors.tray_odd.1, colors.tray_odd.2, colors.tray_odd.3);
+            context.set_source_rgba(
+                colors.tray_odd.0,
+                colors.tray_odd.1,
+                colors.tray_odd.2,
+                colors.tray_odd.3,
+            );
         }
 
         let start = angle;
@@ -549,13 +672,7 @@ fn draw_context_menu_ring(
 
 /// Load and render an icon from the system theme
 /// Falls back to text label if icon not found
-fn render_icon(
-    context: &gtk4::cairo::Context,
-    icon_name: &str,
-    x: f64,
-    y: f64,
-    size: i32,
-) -> bool {
+fn render_icon(context: &gtk4::cairo::Context, icon_name: &str, x: f64, y: f64, size: i32) -> bool {
     if icon_name.is_empty() {
         return false;
     }
@@ -643,7 +760,9 @@ fn load_pixbuf_from_paths(icon_name: &str, size: i32) -> Option<Pixbuf> {
                 let scale = (size as f64 / w.max(h) as f64).min(1.0);
                 let new_w = (w as f64 * scale) as i32;
                 let new_h = (h as f64 * scale) as i32;
-                if let Some(scaled) = pixbuf.scale_simple(new_w, new_h, gdk_pixbuf::InterpType::Bilinear) {
+                if let Some(scaled) =
+                    pixbuf.scale_simple(new_w, new_h, gdk_pixbuf::InterpType::Bilinear)
+                {
                     return Some(scaled);
                 }
             }
@@ -708,7 +827,9 @@ fn setup_click_handler(
                         // Open tray menu
                         *state = HudState::TrayActive;
                         drop(state);
-                        if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
+                        if let Some(da) = widget_weak.upgrade() {
+                            da.queue_draw();
+                        }
                     }
                     HitResult::RingItem(idx) => {
                         // Execute main ring item or toggle submenu
@@ -716,7 +837,9 @@ fn setup_click_handler(
                             if let Some(script) = &item.script {
                                 drop(state);
                                 execute_command(script);
-                                if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
+                                if let Some(da) = widget_weak.upgrade() {
+                                    da.queue_draw();
+                                }
                             }
                         }
                     }
@@ -741,7 +864,9 @@ fn setup_click_handler(
                         *state = HudState::Idle;
                         drop(state);
                         drop(items);
-                        if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
+                        if let Some(da) = widget_weak.upgrade() {
+                            da.queue_draw();
+                        }
                     }
                     HitResult::OuterRingItem(idx) => {
                         // Activate SNI item or open context menu
@@ -754,14 +879,23 @@ fn setup_click_handler(
 
                                 // Spawn async activation
                                 tokio::spawn(async move {
-                                    if let Err(e) = crate::sni_watcher::activate_item(&service, &path, center_x as i32, center_y as i32).await {
+                                    if let Err(e) = crate::sni_watcher::activate_item(
+                                        &service,
+                                        &path,
+                                        center_x as i32,
+                                        center_y as i32,
+                                    )
+                                    .await
+                                    {
                                         if std::env::var("WAYPIE_DEBUG").is_ok() {
                                             eprintln!("Failed to activate SNI item: {}", e);
                                         }
                                     }
                                 });
 
-                                if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
+                                if let Some(da) = widget_weak.upgrade() {
+                                    da.queue_draw();
+                                }
                             } else {
                                 drop(items);
                             }
@@ -780,7 +914,9 @@ fn setup_click_handler(
                     // Click on center closes context menu, return to tray
                     *state = HudState::TrayActive;
                     drop(state);
-                    if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
+                    if let Some(da) = widget_weak.upgrade() {
+                        da.queue_draw();
+                    }
                 } else if let Some(app) = click_cfg.tray_apps.get(app_idx) {
                     let hit = detect_hit_context_ring(radius, theta, ui, app.actions.len());
                     match hit {
@@ -789,7 +925,9 @@ fn setup_click_handler(
                             if let Some(action) = app.actions.get(action_idx) {
                                 drop(state);
                                 execute_command(&action.command);
-                                if let Some(da) = widget_weak.upgrade() { da.queue_draw(); }
+                                if let Some(da) = widget_weak.upgrade() {
+                                    da.queue_draw();
+                                }
                             }
                         }
                         _ => {}
@@ -827,7 +965,7 @@ fn setup_hover_handler(
     config: Rc<AppConfig>,
     hover_state: Rc<RefCell<HoverTarget>>,
     hud_state: Rc<RefCell<HudState>>,
-    wheel_pos: Rc<RefCell<Option<(f64, f64)>>>
+    wheel_pos: Rc<RefCell<Option<(f64, f64)>>>,
 ) {
     let motion = EventControllerMotion::new();
     let motion_cfg = config.clone();
@@ -838,7 +976,9 @@ fn setup_hover_handler(
 
     motion.connect_motion(move |controller, x, y| {
         let ui = &motion_cfg.ui;
-        if ui.hover_mode == "none" { return; }
+        if ui.hover_mode == "none" {
+            return;
+        }
 
         let widget = match controller.widget() {
             Some(w) => w,
@@ -863,9 +1003,13 @@ fn setup_hover_handler(
         match *current_state {
             HudState::Idle => {
                 // Check main ring
-                if let HitResult::TrayButton = detect_hit_main_ring(radius, theta, ui, motion_cfg.items.len()) {
+                if let HitResult::TrayButton =
+                    detect_hit_main_ring(radius, theta, ui, motion_cfg.items.len())
+                {
                     new_target = HoverTarget::TrayButton;
-                } else if let HitResult::RingItem(idx) = detect_hit_main_ring(radius, theta, ui, motion_cfg.items.len()) {
+                } else if let HitResult::RingItem(idx) =
+                    detect_hit_main_ring(radius, theta, ui, motion_cfg.items.len())
+                {
                     new_target = HoverTarget::RingItem(idx);
                 } else if radius < ui.tray_inner_radius {
                     new_target = HoverTarget::Center;
@@ -875,7 +1019,9 @@ fn setup_hover_handler(
                 // Check tray ring or center
                 if radius < ui.tray_inner_radius {
                     new_target = HoverTarget::Center;
-                } else if let HitResult::OuterRingItem(idx) = detect_hit_tray_ring(radius, theta, ui, motion_cfg.tray_apps.len()) {
+                } else if let HitResult::OuterRingItem(idx) =
+                    detect_hit_tray_ring(radius, theta, ui, motion_cfg.tray_apps.len())
+                {
                     new_target = HoverTarget::OuterRingItem(idx);
                 }
             }
@@ -884,7 +1030,9 @@ fn setup_hover_handler(
                 if radius < ui.tray_inner_radius {
                     new_target = HoverTarget::Center;
                 } else if let Some(app) = motion_cfg.tray_apps.get(app_idx) {
-                    if let HitResult::OuterRingItem(idx) = detect_hit_context_ring(radius, theta, ui, app.actions.len()) {
+                    if let HitResult::OuterRingItem(idx) =
+                        detect_hit_context_ring(radius, theta, ui, app.actions.len())
+                    {
                         new_target = HoverTarget::OuterRingItem(idx);
                     }
                 }
@@ -918,9 +1066,7 @@ fn setup_hover_handler(
 }
 
 fn get_volume() -> f64 {
-    let output = Command::new("pamixer")
-        .arg("--get-volume")
-        .output();
+    let output = Command::new("pamixer").arg("--get-volume").output();
 
     if let Ok(output) = output {
         let s = String::from_utf8_lossy(&output.stdout);
@@ -930,143 +1076,6 @@ fn get_volume() -> f64 {
     0.0
 }
 
-/// Detect which Wayland compositor is running
-fn detect_wayland_compositor() -> &'static str {
-    if std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok() {
-        "hyprland"
-    } else if std::env::var("SWAYSOCK").is_ok() {
-        "sway"
-    } else if std::env::var("GNOME_SHELL_SESSION_MODE").is_ok() {
-        "gnome"
-    } else if std::env::var("KDE_FULL_SESSION").is_ok() {
-        "kde"
-    } else {
-        "unknown"
-    }
-}
-
-/// Get absolute cursor position on Wayland (multi-compositor)
-/// Tries compositor-specific methods with fallback to screen center
-fn get_cursor_position() -> Option<(f64, f64)> {
-    let compositor = detect_wayland_compositor();
-
-    match compositor {
-        "hyprland" => get_cursor_position_hyprland(),
-        "sway" => get_cursor_position_sway(),
-        _ => None,
-    }
-}
-
-/// Get cursor position on Hyprland using hyprctl
-fn get_cursor_position_hyprland() -> Option<(f64, f64)> {
-    let output = Command::new("hyprctl")
-        .arg("cursorpos")
-        .output();
-
-    if let Ok(output) = output {
-        let s = String::from_utf8_lossy(&output.stdout);
-        // Output format: "x,y" (e.g., "1920,1080")
-        let parts: Vec<&str> = s.trim().split(',').collect();
-        if parts.len() == 2 {
-            if let (Ok(x), Ok(y)) = (parts[0].parse::<i32>(), parts[1].parse::<i32>()) {
-                return Some((x as f64, y as f64));
-            }
-        }
-    }
-    None
-}
-
-/// Get cursor position on Sway using swaymsg
-fn get_cursor_position_sway() -> Option<(f64, f64)> {
-    let output = Command::new("swaymsg")
-        .args(&["-t", "get_tree"])
-        .output();
-
-    if let Ok(output) = output {
-        let _s = String::from_utf8_lossy(&output.stdout);
-        // Parse JSON to find mouse pointer position
-        // This is a simplified approach - swaymsg doesn't directly report cursor
-        // So we fall back to None and use screen center
-    }
-    None
-}
-
-/// Move cursor to the center of the screen (multi-compositor Wayland)
-/// Tries compositor-specific methods with fallback
-fn move_cursor_to_window_center(_window: &ApplicationWindow) {
-    let compositor = detect_wayland_compositor();
-
-    match compositor {
-        "hyprland" => {
-            // Hyprland: query current screen size and move to center
-            // Use hyprctl to get active monitor info and calculate center
-            if let Some((screen_width, screen_height)) = get_screen_dimensions() {
-                let center_x = screen_width / 2;
-                let center_y = screen_height / 2;
-
-                let _ = Command::new("hyprctl")
-                    .args(&[
-                        "dispatch",
-                        "movecursor",
-                        "exact",
-                        &center_x.to_string(),
-                        &center_y.to_string(),
-                    ])
-                    .output();
-            }
-        }
-        "sway" => {
-            // Sway: doesn't support direct cursor movement
-        }
-        _ => {
-            // Other compositors: no standard cursor movement API
-        }
-    }
-}
-
-/// Get screen dimensions from Hyprland (focused monitor)
-fn get_screen_dimensions() -> Option<(i32, i32)> {
-    let output = Command::new("hyprctl")
-        .args(&["monitors", "-j"])
-        .output();
-
-    if let Ok(output) = output {
-        let s = String::from_utf8_lossy(&output.stdout);
-
-        // Simple JSON parsing: look for first monitor's width and height
-        // Format: "width": 3840, "height": 2160
-        let lines: Vec<&str> = s.lines().collect();
-        let mut width: Option<i32> = None;
-        let mut height: Option<i32> = None;
-
-        for line in lines {
-            if width.is_none() && line.contains("\"width\"") {
-                width = extract_json_number(line);
-            } else if height.is_none() && line.contains("\"height\"") {
-                height = extract_json_number(line);
-            }
-
-            // We found both, return
-            if let (Some(w), Some(h)) = (width, height) {
-                return Some((w, h));
-            }
-        }
-    }
-    None
-}
-
-/// Extract number from JSON line like: "width": 3840,
-fn extract_json_number(line: &str) -> Option<i32> {
-    // Find the colon and parse after it
-    if let Some(colon_pos) = line.find(':') {
-        let value_part = &line[colon_pos + 1..];
-        // Remove whitespace and trailing comma
-        let value_str = value_part.trim().trim_end_matches(',').trim();
-        value_str.parse::<i32>().ok()
-    } else {
-        None
-    }
-}
 // ─────────────────────────────────────────────────────────────
 // COORDINATE SYSTEM & HIT DETECTION
 // ─────────────────────────────────────────────────────────────
@@ -1134,7 +1143,12 @@ fn detect_hit(
 
 /// Hit detection for main ring (Idle state)
 /// Detects: main ring items (3 o'clock to 6 o'clock) + tray button at 6 o'clock
-fn detect_hit_main_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, item_count: usize) -> HitResult {
+fn detect_hit_main_ring(
+    radius: f64,
+    theta: f64,
+    ui: &crate::config::UiConfig,
+    item_count: usize,
+) -> HitResult {
     // Tray button: segment centered at 270° (6 o'clock)
     // Each segment spans 360 / (item_count + 1) degrees
     if item_count == 0 {
@@ -1153,8 +1167,9 @@ fn detect_hit_main_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, i
     let tray_start = 270.0 - half_segment;
     let tray_end = 270.0 + half_segment;
 
-    if (theta >= tray_start && theta <= tray_end) ||
-       (tray_start < 0.0 && (theta >= tray_start + 360.0 || theta <= tray_end)) {
+    if (theta >= tray_start && theta <= tray_end)
+        || (tray_start < 0.0 && (theta >= tray_start + 360.0 || theta <= tray_end))
+    {
         return HitResult::TrayButton;
     }
 
@@ -1169,9 +1184,10 @@ fn detect_hit_main_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, i
             continue;
         }
 
-        if (theta >= item_start && theta <= item_end) ||
-           (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end)) ||
-           (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0)) {
+        if (theta >= item_start && theta <= item_end)
+            || (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end))
+            || (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0))
+        {
             return HitResult::RingItem(i);
         }
     }
@@ -1181,7 +1197,12 @@ fn detect_hit_main_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, i
 
 /// Hit detection for tray ring (TrayActive state)
 /// Detects: tray apps in outer ring
-fn detect_hit_tray_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, app_count: usize) -> HitResult {
+fn detect_hit_tray_ring(
+    radius: f64,
+    theta: f64,
+    ui: &crate::config::UiConfig,
+    app_count: usize,
+) -> HitResult {
     if app_count == 0 {
         return HitResult::None;
     }
@@ -1202,9 +1223,10 @@ fn detect_hit_tray_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, a
         let item_start = item_angle - half_segment;
         let item_end = item_angle + half_segment;
 
-        if (theta >= item_start && theta <= item_end) ||
-           (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end)) ||
-           (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0)) {
+        if (theta >= item_start && theta <= item_end)
+            || (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end))
+            || (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0))
+        {
             return HitResult::OuterRingItem(i);
         }
     }
@@ -1214,7 +1236,12 @@ fn detect_hit_tray_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, a
 
 /// Hit detection for context menu ring (ContextActive state)
 /// Detects: context menu actions
-fn detect_hit_context_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig, action_count: usize) -> HitResult {
+fn detect_hit_context_ring(
+    radius: f64,
+    theta: f64,
+    ui: &crate::config::UiConfig,
+    action_count: usize,
+) -> HitResult {
     if action_count == 0 {
         return HitResult::None;
     }
@@ -1235,9 +1262,10 @@ fn detect_hit_context_ring(radius: f64, theta: f64, ui: &crate::config::UiConfig
         let item_start = item_angle - half_segment;
         let item_end = item_angle + half_segment;
 
-        if (theta >= item_start && theta <= item_end) ||
-           (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end)) ||
-           (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0)) {
+        if (theta >= item_start && theta <= item_end)
+            || (item_start < 0.0 && (theta >= item_start + 360.0 || theta <= item_end))
+            || (item_end > 360.0 && (theta >= item_start || theta <= item_end - 360.0))
+        {
             return HitResult::ContextMenuItem(i);
         }
     }

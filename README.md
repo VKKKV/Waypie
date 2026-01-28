@@ -1,17 +1,5 @@
 # Waypie
 
-**Waypie** is a unified Radial Command Center for **Arch Linux on Wayland**. It provides a futuristic, controller-friendly, and mouse-driven circular interface for system controls and app launching.
-
-### 🌍 Multi-Compositor Support
-
-Works on all Wayland compositors:
-- **Hyprland** ✅ Full cursor positioning support
-- **Niri** ✅ Screen-centered positioning
-- **GNOME** ✅ Screen-centered positioning
-- **KDE Plasma** ✅ Screen-centered positioning
-- **Sway** ✅ Screen-centered positioning
-- **Any Wayland compositor** ✅ Graceful fallback
-
 ## Features
 
 *   **Interactive Radial Wheel:** Central hub for time, date, and volume, surrounded by a customizable ring of application launchers.
@@ -118,41 +106,3 @@ Run the system tray service in the background:
 waypie daemon
 ```
 
-## Hyprland Integration
-
-Add the following to your `~/.config/hypr/hyprland.conf`:
-
-```conf
-# Path to your compiled binary
-$waypie = $HOME/path/to/waypie/target/release/waypie
-
-# Open the Radial Command Wheel (SUPER + W)
-bind = SUPER, W, exec, $waypie
-
-# Autostart the background tray service (Optional)
-exec-once = $waypie daemon
-```
-
-## Other Wayland Compositor Integration
-
-### GNOME (Settings or Extensions)
-```bash
-waypie              # Run from Activities or command line
-waypie daemon       # Optional background tray
-```
-
-### KDE Plasma (Global Shortcuts)
-1. System Settings → Shortcuts → Custom Shortcuts
-2. Create new shortcut for `waypie`
-3. Or run via application menu
-
-### Sway (~/.config/sway/config)
-```conf
-bindsym $mod+w exec waypie
-```
-
-### Niri
-```bash
-waypie              # Launch from menu or terminal
-waypie daemon       # Optional background service
-```

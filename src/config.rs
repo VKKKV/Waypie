@@ -1,6 +1,30 @@
 use serde::Deserialize;
 use std::fs;
 
+// Defaults
+fn default_icon() -> String { "archlinux-logo".to_string() }
+fn default_refresh_rate() -> u64 { 200 }
+fn default_size() -> i32 { 600 }
+fn default_outer_radius() -> f64 { 180.0 }
+fn default_tray_inner_radius() -> f64 { 110.0 }
+fn default_vol_radius() -> f64 { 95.0 }
+fn default_font_family() -> String { "Sans".to_string() }
+fn default_hover_mode() -> String { "highlight".to_string() }
+
+fn default_bg_color() -> (f64, f64, f64, f64) { (0.1, 0.1, 0.1, 0.9) }
+fn default_vol_track() -> (f64, f64, f64, f64) { (0.3, 0.3, 0.3, 0.5) }
+fn default_vol_color() -> (f64, f64, f64) { (0.09, 0.57, 0.82) } // Arch Blue
+fn default_vol_warn() -> (f64, f64, f64) { (0.8, 0.2, 0.2) } // Red
+fn default_text_color() -> (f64, f64, f64) { (1.0, 1.0, 1.0) }
+fn default_tray_even() -> (f64, f64, f64, f64) { (0.15, 0.15, 0.15, 0.9) }
+fn default_tray_odd() -> (f64, f64, f64, f64) { (0.2, 0.2, 0.2, 0.9) }
+fn default_hover_overlay() -> (f64, f64, f64, f64) { (1.0, 1.0, 1.0, 0.1) } // White 10% opacity
+
+fn default_action_left_click() -> Option<String> { Some("pwvucontrol".to_string()) } // Default: open volume control
+fn default_action_right_click() -> Option<String> { None }
+fn default_action_scroll_up() -> Option<String> { Some("pamixer -i 5".to_string()) }
+fn default_action_scroll_down() -> Option<String> { Some("pamixer -d 5".to_string()) }
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct AppConfig {
     #[serde(default = "default_icon")]
@@ -136,29 +160,6 @@ impl Default for ActionConfig {
     }
 }
 
-// Defaults
-fn default_icon() -> String { "archlinux-logo".to_string() }
-fn default_refresh_rate() -> u64 { 200 }
-fn default_size() -> i32 { 600 }
-fn default_outer_radius() -> f64 { 180.0 }
-fn default_tray_inner_radius() -> f64 { 110.0 }
-fn default_vol_radius() -> f64 { 95.0 }
-fn default_font_family() -> String { "Sans".to_string() }
-fn default_hover_mode() -> String { "highlight".to_string() }
-
-fn default_bg_color() -> (f64, f64, f64, f64) { (0.1, 0.1, 0.1, 0.9) }
-fn default_vol_track() -> (f64, f64, f64, f64) { (0.3, 0.3, 0.3, 0.5) }
-fn default_vol_color() -> (f64, f64, f64) { (0.09, 0.57, 0.82) } // Arch Blue
-fn default_vol_warn() -> (f64, f64, f64) { (0.8, 0.2, 0.2) } // Red
-fn default_text_color() -> (f64, f64, f64) { (1.0, 1.0, 1.0) }
-fn default_tray_even() -> (f64, f64, f64, f64) { (0.15, 0.15, 0.15, 0.9) }
-fn default_tray_odd() -> (f64, f64, f64, f64) { (0.2, 0.2, 0.2, 0.9) }
-fn default_hover_overlay() -> (f64, f64, f64, f64) { (1.0, 1.0, 1.0, 0.1) } // White 10% opacity
-
-fn default_action_left_click() -> Option<String> { Some("pwvucontrol".to_string()) } // Default: open volume control
-fn default_action_right_click() -> Option<String> { None }
-fn default_action_scroll_up() -> Option<String> { Some("pamixer -i 5".to_string()) }
-fn default_action_scroll_down() -> Option<String> { Some("pamixer -d 5".to_string()) }
 
 pub fn load() -> AppConfig {
     let xdg_dirs = xdg::BaseDirectories::with_prefix("waypie");
