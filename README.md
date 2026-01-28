@@ -1,6 +1,16 @@
 # Waypie
 
-**Waypie** is a unified Radial Command Center for **Arch Linux** on **Hyprland**. It provides a futuristic, controller-friendly, and mouse-driven circular interface for system controls and app launching.
+**Waypie** is a unified Radial Command Center for **Arch Linux on Wayland**. It provides a futuristic, controller-friendly, and mouse-driven circular interface for system controls and app launching.
+
+### 🌍 Multi-Compositor Support
+
+Works on all Wayland compositors:
+- **Hyprland** ✅ Full cursor positioning support
+- **Niri** ✅ Screen-centered positioning
+- **GNOME** ✅ Screen-centered positioning
+- **KDE Plasma** ✅ Screen-centered positioning
+- **Sway** ✅ Screen-centered positioning
+- **Any Wayland compositor** ✅ Graceful fallback
 
 ## Features
 
@@ -8,7 +18,8 @@
 *   **Hover Effects:** Visual feedback when hovering over the center hub or ring segments (highlight).
 *   **Highly Configurable:** Customize colors, sizes, radii, polling rates, and mouse actions.
 *   **System Tray Integration:** Optional background daemon for tray icon support.
-*   **Hyprland Native:** Built with `gtk4-layer-shell` for seamless integration.
+*   **Universal Wayland Support:** Works on Hyprland, Niri, GNOME, KDE, Sway, and any Wayland compositor.
+*   **Smart Cursor Positioning:** Opens wheel at cursor on Hyprland; gracefully centers on other compositors.
 
 ## Installation
 
@@ -120,4 +131,28 @@ bind = SUPER, W, exec, $waypie
 
 # Autostart the background tray service (Optional)
 exec-once = $waypie daemon
+```
+
+## Other Wayland Compositor Integration
+
+### GNOME (Settings or Extensions)
+```bash
+waypie              # Run from Activities or command line
+waypie daemon       # Optional background tray
+```
+
+### KDE Plasma (Global Shortcuts)
+1. System Settings → Shortcuts → Custom Shortcuts
+2. Create new shortcut for `waypie`
+3. Or run via application menu
+
+### Sway (~/.config/sway/config)
+```conf
+bindsym $mod+w exec waypie
+```
+
+### Niri
+```bash
+waypie              # Launch from menu or terminal
+waypie daemon       # Optional background service
 ```

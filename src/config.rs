@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub ui: UiConfig,
     #[serde(default)]
     pub actions: ActionConfig,
+    #[serde(default)]
+    pub tray_apps: Vec<TrayAppConfig>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -22,6 +24,22 @@ pub struct MenuItemConfig {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
+pub struct TrayAppConfig {
+    pub label: String,
+    pub icon: String,
+    #[serde(default)]
+    pub actions: Vec<TrayActionConfig>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct TrayActionConfig {
+    pub label: String,
+    pub command: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct UiConfig {
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate_ms: u64,
@@ -95,6 +113,7 @@ impl Default for ColorConfig {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct ActionConfig {
     #[serde(default = "default_action_left_click")]
     pub left_click: Option<String>,
@@ -158,6 +177,7 @@ pub fn load() -> AppConfig {
                 ],
                 ui: UiConfig::default(),
                 actions: ActionConfig::default(),
+                tray_apps: vec![],
             }
         }
     }
