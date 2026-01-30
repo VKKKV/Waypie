@@ -185,7 +185,7 @@ fn draw_radial_wheel(
     let colors = &ui.colors;
 
     // 1. Background - clear the entire drawing area first
-    context.set_source_rgba(0.0, 0.0, 0.0, 0.1);
+    context.set_source_rgba(0.0, 0.0, 0.0, 0.5);
     context.paint().expect("Failed to paint clear background");
 
     // Draw the background wheel circle

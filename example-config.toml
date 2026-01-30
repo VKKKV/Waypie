@@ -1,0 +1,46 @@
+icon = "archlinux-logo"
+
+# Radial Slices (Clockwise starting from 12 o'clock)
+[[items]]
+label = "Terminal"
+script = "ghostty"
+
+[[items]]
+label = "Browser"
+script = "firefox"
+
+[[items]]
+label = "Files"
+script = "thunar"
+
+[[items]]
+label = "Power"
+script = "wlogout"
+
+[ui]
+refresh_rate_ms = 200
+width = 600
+height = 600
+outer_radius = 180.0
+tray_inner_radius = 110.0
+vol_radius = 95.0
+font_family = "Sans"
+hover_mode = "highlight"
+
+[ui.colors]
+# Hex colors: #RRGGBB or #RRGGBBAA (8-bit per channel)
+background = "#1A1A1AE6"        # Dark grey with 90% alpha
+volume_track = "#4D4D4D80"      # Grey with 50% alpha
+volume_arc = "#0E91D2"          # Arch Blue
+volume_warning = "#CC3333"      # Red for high volume
+text = "#FFFFFF"                # White
+tray_even = "#262626E6"         # Dark even rows
+tray_odd = "#333333E6"          # Dark odd rows
+hover_overlay = "#FFFFFF19"     # White 10% opacity
+
+[actions]
+# Commands for interactions with the Central Hub
+left_click = "pwvucontrol"      # Default: open volume control
+right_click = ""                # Empty = disabled
+scroll_up = "pamixer -i 5"      # Volume up
+scroll_down = "pamixer -d 5"    # Volume down

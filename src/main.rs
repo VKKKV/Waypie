@@ -1,4 +1,5 @@
 mod config;
+mod color;
 mod tray;
 mod hud;
 mod sni_watcher;
