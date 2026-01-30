@@ -43,7 +43,7 @@ fn default_tray_odd() -> Color4 { DEFAULT_TRAY_ODD }
 fn default_hover_overlay() -> Color4 { DEFAULT_HOVER_OVERLAY }
 
 fn default_action_left_click() -> Option<String> { Some("pwvucontrol".into()) }
-fn default_action_right_click() -> Option<String> { None }
+fn default_action_right_click() -> Option<String> { Some("pwvucontrol".into()) }
 fn default_action_scroll_up() -> Option<String> { Some("pamixer -i 5".into()) }
 fn default_action_scroll_down() -> Option<String> { Some("pamixer -d 5".into()) }
 

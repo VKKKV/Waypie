@@ -1,51 +1,52 @@
 # Waypie Project Overview
 
-**Waypie** is a unified Rust-based desktop utility **for Arch Linux on Wayland**. It leverages `gtk4`, `gtk4-layer-shell`, and `ksni` to provide a seamless Wayland-native visual experience.
+**Waypie** is a high-performance, unified desktop utility engineered exclusively for **Arch Linux on Wayland**. It is built with a **Pure Rust** architecture, leveraging **Iced** and **`iced_layershell`** to deliver a native, resource-efficient, and visually cohesive user experience.
 
-## Optimized Structure
+## Architectural Highlights
 
-The project is consolidated into a single binary (`waypie`) with modular source code:
+*   **Pure Rust & Wayland Native:** Eliminates legacy bindings (Qt/CXX) in favor of a type-safe, memory-safe Rust implementation.
+*   **Wayland Layer Shell:** Utilizes the `iced_layershell` crate to render the HUD as a genuine Wayland Overlay. This ensures proper z-ordering (floating above windows), input handling, and transparency without hacking X11 hints.
+*   **Declarative UI:** powered by **Iced**, allowing for a reactive, elm-architecture-inspired interface definition.
+*   **Unified Binary:** consolidates the Dashboard (HUD) and System Tray logic into a single optimized executable.
+
+## Project Structure
 
 ```
 waypie/
-├── Cargo.toml
+├── Cargo.toml       # Dependencies (iced, iced_layershell, ksni, tokio)
 └── src/
-    ├── main.rs      # Entry point & Argument parsing
-    ├── hud/         # HUD & Dashboard UI Logic (GTK4)
+    ├── main.rs      # Entry point: Initializes Iced Layershell or Daemon mode
+    ├── hud/         # Iced Layershell UI implementation
+    │   ├── mod.rs
+    │   └── app.rs   # State management and View logic
+    ├── tray/        # System Tray logic (KSNI)
     │   └── mod.rs
-    ├── tray/        # System Tray Logic (KSNI)
-    │   └── mod.rs
-    ├── config.rs    # Configuration Management
-    └── utils.rs     # Common utilities
+    ├── config.rs    # Configuration parsing (TOML)
+    ├── sni_watcher.rs # DBus StatusNotifierItem discovery
+    └── utils.rs     # Shared utilities
 ```
 
-## Modes & Usage
+## Modes & Operation
 
-The `waypie` binary supports different modes via command-line arguments:
+The `waypie` binary operates in two primary modes:
 
-1.  **Dashboard Mode (Default)**
+1.  **Dashboard Mode (HUD)**
     *   **Command:** `waypie`
-    *   **Behavior:** Launches the persistent desktop radial wheel (HUD) AND the system tray icon.
-    *   **Visuals:** Interactive radial interface showing time, date, volume, and app launcher rings.
+    *   **Mechanism:** Initializes a Wayland Layer Shell surface via `iced_layershell`.
+    *   **Features:** Displays the radial menu, time, date, and volume controls. Supports keyboard navigation and transparency.
 
-2. **Daemon Mode**
+2.  **Daemon Mode**
     *   **Command:** `waypie daemon`
-    *   **Behavior:** Launches the system tray icon only in the background.
-    *   **Visuals:** Persistent tray icon with system tray menu items.
+    *   **Mechanism:** Runs a lightweight background process using `tokio` and `ksni`.
+    *   **Features:** Hosts the System Tray icon and handles DBus communication for SNI discovery.
 
-## Building
+## Build Requirements
+
+*   **Rust:** Edition 2024 (stable)
+*   **System Libraries:** `wayland-client`, `libxkbcommon`, `vulkan` (or `opengl`) drivers.
 
 ```bash
 cargo build --release
 ```
 
-The binary will be at `target/release/waypie`.
-
-## Key Features
-
-*   **Interactive Radial Wheel:** Central hub displays time, date, and volume with visual arc indicator (blue normally, red if > 80%).
-*   **Hover Effects:** Visual feedback when hovering over center hub or outer ring segments.
-*   **Customizable Ring Segments:** Configurable app launcher items arranged in a circle.
-*   **System Tray Integration:** Supports recursive submenus in tray menu.
-*   **Configurable Actions:** Center hub supports click and scroll handlers for volume control and custom commands.
-
+**Artifact:** `target/release/waypie`

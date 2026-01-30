@@ -19,7 +19,7 @@ pub type TrayItems = Arc<Mutex<Vec<TrayItem>>>;
 /// SNI Watcher - discovers and tracks StatusNotifierItems from DBus
 pub struct SNIWatcher {
     items: TrayItems,
-    on_change: Option<Box<dyn Fn() + Send>>,
+    on_change: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 impl SNIWatcher {
@@ -36,11 +36,11 @@ impl SNIWatcher {
 
     /// Set a callback that fires whenever the tray items list changes
     #[allow(dead_code)]
-    pub fn set_on_change<F: Fn() + Send + 'static>(&mut self, callback: F) {
+    pub fn set_on_change<F: Fn() + Send + Sync + 'static>(&mut self, callback: F) {
         self.on_change = Some(Box::new(callback));
     }
 
-    pub async fn start(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn start(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Connect to session bus
         let conn = Connection::session().await?;
 
@@ -53,7 +53,7 @@ impl SNIWatcher {
         Ok(())
     }
 
-    async fn register_host(&self, conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    async fn register_host(&self, conn: &Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let watcher = StatusNotifierWatcherProxy::new(conn).await?;
         watcher
             .register_status_notifier_host("/org/kde/StatusNotifierHost")
@@ -62,7 +62,7 @@ impl SNIWatcher {
         Ok(())
     }
 
-    async fn poll_for_items(&self, conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    async fn poll_for_items(&self, conn: &Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut last_items = Vec::new();
 
         loop {
@@ -128,7 +128,7 @@ impl SNIWatcher {
     async fn fetch_registered_items(
         &self,
         conn: &Connection,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
         let watcher = StatusNotifierWatcherProxy::new(conn).await?;
         let items = watcher.registered_status_notifier_items().await?;
         Ok(items)
@@ -138,7 +138,7 @@ impl SNIWatcher {
         &self,
         conn: &Connection,
         service_path: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Parse service path: could be "org.kde.StatusNotifierItem-1234-1"
         // or "org.kde.StatusNotifierItem-1234-1/org/kde/StatusNotifierItem"
         let (service, path) = if let Some((s, p)) = service_path.split_once('/') {
@@ -171,7 +171,7 @@ impl SNIWatcher {
         conn: &Connection,
         service: &str,
         path: &str,
-    ) -> Result<(String, String, String), Box<dyn std::error::Error>> {
+    ) -> Result<(String, String, String), Box<dyn std::error::Error + Send + Sync>> {
         let item = StatusNotifierItemProxy::builder(conn)
             .destination(service)?
             .path(path)?
@@ -191,7 +191,7 @@ impl SNIWatcher {
         service_path: &str,
         x: i32,
         y: i32,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let conn = Connection::session().await?;
 
         // Parse service path
@@ -218,7 +218,7 @@ impl SNIWatcher {
         service_path: &str,
         x: i32,
         y: i32,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let conn = Connection::session().await?;
 
         // Parse service path
@@ -241,7 +241,7 @@ impl SNIWatcher {
 }
 
 /// Standalone function to activate a StatusNotifierItem
-pub async fn activate_item(service: &str, path: &str, x: i32, y: i32) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn activate_item(service: &str, path: &str, x: i32, y: i32) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let conn = Connection::session().await?;
 
     let item = StatusNotifierItemProxy::builder(&conn)

@@ -4,15 +4,24 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cairo = "0.0.4"
-chrono = "0.4.43"
-gdk-pixbuf = "0.20"
-gtk4 = "0.10.3"
-gtk4-layer-shell = "0.7.1"
-ksni = { version = "0.3.3", features = ["blocking"] }
-serde = { version = "1.0.228", features = ["derive"] }
-system_shutdown = "4.1.0"
-tokio = { version = "1.49.0", features = ["full"] }
-toml = "0.9.11"
-xdg = "3.0.0"
-zbus = { version = "4", features = ["tokio"] }
+# Async Runtime
+tokio = { version = "1.37", features = ["full"] }
+
+# GUI & Wayland
+iced = { version = "0.14", features = ["tokio", "canvas", "advanced", "svg", "image"] }
+iced_layershell = "0.14" 
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+# System Integration
+ksni = { version = "0.3", features = ["blocking"] }
+zbus = { version = "4.1", features = ["tokio"] }
+xdg = "3.0"
+system_shutdown = "4.1"
+
+# Utils & Config
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+chrono = "0.4"
+anyhow = "1.0"
+serde_json = "1.0.149"

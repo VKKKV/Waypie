@@ -2,14 +2,18 @@
 
 ## Features
 
-*   **Interactive Radial Wheel:** Central hub for time, date, and volume, surrounded by a customizable ring of application launchers.
-*   **Hover Effects:** Visual feedback when hovering over the center hub or ring segments (highlight).
-*   **Highly Configurable:** Customize colors, sizes, radii, polling rates, and mouse actions.
-*   **System Tray Integration:** Optional background daemon for tray icon support.
-*   **Universal Wayland Support:** Works on Hyprland, Niri, GNOME, KDE, Sway, and any Wayland compositor.
-*   **Smart Cursor Positioning:** Opens wheel at cursor on Hyprland; gracefully centers on other compositors.
+*   **Qt/QML Powered:** Smooth, hardware-accelerated UI with modern transparency and animations.
+*   **Interactive Radial Wheel:** Central hub for time, date, and volume.
+*   **Dynamic System Tray:** Monitors and displays tray items from other apps via DBus.
+*   **Highly Configurable:** Customize colors, sizes, and actions (Work in progress for Qt port).
+*   **Universal Wayland Support:** Works on Hyprland, Niri, GNOME, KDE, Sway.
 
 ## Installation
+
+### Prerequisites
+
+*   **Qt 6** (Core, Gui, Qml, Quick)
+*   **CMake** (Required for CXX-Qt build)
 
 ### 1. Build from Source
 

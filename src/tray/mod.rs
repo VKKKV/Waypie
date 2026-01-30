@@ -1,12 +1,13 @@
-use ksni::{self, menu::*, TrayMethods};
+use ksni::{self, menu::*, Tray, TrayMethods};
 use crate::config::{AppConfig, MenuItemConfig};
 use crate::utils::execute_command;
+use std::time::Duration;
 
 pub struct DynamicTray {
     config: AppConfig,
 }
 
-impl ksni::Tray for DynamicTray {
+impl Tray for DynamicTray {
     fn id(&self) -> String {
         "waypie-tray".into()
     }
@@ -61,15 +62,26 @@ fn build_menu_items(items: &[MenuItemConfig]) -> Vec<MenuItem<DynamicTray>> {
     menu_items
 }
 
-pub async fn run(config: AppConfig) -> Option<ksni::Handle<DynamicTray>> {
-    let tray = DynamicTray { config };
-    match tray.spawn().await {
-        Ok(handle) => Some(handle),
-        Err(e) => {
-            if std::env::var("WAYPIE_DEBUG").is_ok() {
-                eprintln!("Note: System tray icon skipped (Tray manager not found or error): {}", e);
+pub fn run_daemon() -> anyhow::Result<()> {
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async {
+        let config = crate::config::load();
+
+        // Start SNI Watcher
+        let watcher = crate::sni_watcher::SNIWatcher::new();
+        tokio::spawn(async move {
+            if let Err(e) = watcher.start().await {
+                eprintln!("SNI Watcher error: {}", e);
             }
-            None
+        });
+
+        // Start Tray
+        let tray = DynamicTray { config };
+        let _handle = tray.spawn().await;
+
+        // Keep the process alive
+        loop {
+            tokio::time::sleep(Duration::from_secs(60)).await;
         }
-    }
+    })
 }
