@@ -4,12 +4,11 @@ use iced::widget::canvas::{self, Canvas, Path, Stroke};
 use iced::widget::{column, text, container, mouse_area};
 use iced::{
     alignment, mouse, time, keyboard, Color, Element, Length, Rectangle, Subscription,
-    Task, Theme, Event,
+    Task, Theme, Event, Point, Padding,
 };
 use iced_layershell::settings::{LayerShellSettings, Settings};
 use iced_layershell::reexport::{Anchor, Layer, KeyboardInteractivity};
 use iced_layershell::actions::LayershellCustomActionWithId;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 pub struct WaypieHud {
@@ -18,6 +17,7 @@ pub struct WaypieHud {
     volume: f32,
     volume_text: String,
     config: AppConfig,
+    cursor_position: Option<Point>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +28,8 @@ pub enum Message {
     RightClick,
     Scroll(mouse::ScrollDelta),
     Exit,
+    CursorMoved(Point),
+    TriggerCursor,
 }
 
 impl TryInto<LayershellCustomActionWithId> for Message {
@@ -46,8 +48,18 @@ impl WaypieHud {
     fn new(config: AppConfig) -> (Self, Task<Message>) {
         let (t, d, v, vt) = Self::get_data();
         
-        // Attempt to warp cursor to center of screen on startup
-        crate::utils::center_cursor();
+        // Only center if NOT opening at cursor
+        if !config.ui.open_at_cursor {
+             crate::utils::center_cursor();
+        }
+
+        let initial_task = if config.ui.open_at_cursor {
+            Task::perform(async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }, |_| Message::TriggerCursor)
+        } else {
+            Task::none()
+        };
 
         (
             Self {
@@ -56,8 +68,9 @@ impl WaypieHud {
                 volume: v,
                 volume_text: vt,
                 config,
+                cursor_position: None,
             },
-            Task::none(),
+            initial_task,
         )
     }
 
@@ -70,9 +83,15 @@ impl WaypieHud {
                 self.volume = v;
                 self.volume_text = vt;
             }
+            Message::TriggerCursor => {
+                return Task::perform(async {
+                    tokio::task::spawn_blocking(|| {
+                        crate::utils::trigger_cursor_event();
+                    }).await.ok();
+                }, |_| Message::Tick(Instant::now()));
+            }
             Message::LeftClick => {
                 if let Some(cmd) = &self.config.actions.left_click {
-                    // Quick fix for user config error
                     let cmd_to_run = if cmd == "pavol" { "pavucontrol" } else { cmd };
                     execute_command(cmd_to_run);
                 }
@@ -101,15 +120,23 @@ impl WaypieHud {
             Message::Exit => {
                 std::process::exit(0);
             }
+            Message::CursorMoved(point) => {
+                if self.config.ui.open_at_cursor && self.cursor_position.is_none() {
+                    self.cursor_position = Some(point);
+                }
+            }
             Message::LayerShellEvent(_) => {}
         }
         Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
+        let width = self.config.ui.width as f32;
+        let height = self.config.ui.height as f32;
+
         let ring = Canvas::new(Ring { volume: self.volume })
-            .width(Length::Fixed(400.0))
-            .height(Length::Fixed(400.0));
+            .width(Length::Fixed(width))
+            .height(Length::Fixed(height));
 
         let content = column![
             text(&self.time).size(42).color(Color::WHITE),
@@ -125,13 +152,13 @@ impl WaypieHud {
                 container(content).center_x(Length::Fill).center_y(Length::Fill)
             ]
         )
-        .width(Length::Fixed(400.0))
-        .height(Length::Fixed(400.0))
-        .style(|_theme| {
+        .width(Length::Fixed(width))
+        .height(Length::Fixed(height))
+        .style(move |_theme| {
             container::Style {
                 background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.8).into()),
                 border: iced::Border {
-                    radius: 200.0.into(),
+                    radius: (width / 2.0).into(),
                     ..iced::Border::default()
                 },
                 ..container::Style::default()
@@ -142,12 +169,45 @@ impl WaypieHud {
             .on_press(Message::LeftClick)
             .on_right_press(Message::RightClick);
 
-        container(clickable_hud)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
+        let root_style = |_theme: &_| container::Style {
+            background: Some(Color::TRANSPARENT.into()),
+            ..Default::default()
+        };
+
+        if self.config.ui.open_at_cursor {
+            if let Some(pos) = self.cursor_position {
+                let left_pad = (pos.x - width / 2.0).max(0.0);
+                let top_pad = (pos.y - height / 2.0).max(0.0);
+
+                container(clickable_hud)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(Padding {
+                        top: top_pad,
+                        right: 0.0,
+                        bottom: 0.0,
+                        left: left_pad,
+                    })
+                    .align_x(alignment::Horizontal::Left)
+                    .align_y(alignment::Vertical::Top)
+                    .style(root_style)
+                    .into()
+            } else {
+                container(text(""))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(root_style)
+                    .into()
+            }
+        } else {
+            container(clickable_hud)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(root_style)
+                .into()
+        }
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -164,6 +224,9 @@ impl WaypieHud {
                     } else {
                         None
                     }
+                }
+                Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                     Some(Message::CursorMoved(position))
                 }
                 _ => None
             }
@@ -202,7 +265,6 @@ impl canvas::Program<Message> for Ring {
         let center = frame.center();
         let radius = bounds.width.min(bounds.height) / 2.0;
 
-        // Outer ring border
         let path = Path::circle(center, radius - 1.0);
         frame.stroke(
             &path,
@@ -211,7 +273,6 @@ impl canvas::Program<Message> for Ring {
                 .with_width(2.0),
         );
 
-        // Volume Arc
         let vol_radius = radius - 20.0;
         let start_angle = -std::f32::consts::FRAC_PI_2;
         let end_angle = start_angle + self.volume * 2.0 * std::f32::consts::PI;
@@ -238,7 +299,7 @@ impl canvas::Program<Message> for Ring {
 }
 
 fn get_volume() -> f32 {
-    let output = Command::new("pamixer").arg("--get-volume").output();
+    let output = std::process::Command::new("pamixer").arg("--get-volume").output();
     if let Ok(output) = output {
         let s = String::from_utf8_lossy(&output.stdout);
         return s.trim().parse().unwrap_or(0.0) / 100.0;
@@ -246,22 +307,46 @@ fn get_volume() -> f32 {
     0.0
 }
 
+fn custom_theme() -> Theme {
+    Theme::Custom(std::sync::Arc::new(iced::theme::Custom::new(
+        "Transparent".into(),
+        iced::theme::Palette {
+            background: Color::TRANSPARENT,
+            text: Color::WHITE,
+            primary: Color::WHITE,
+            success: Color::from_rgb(0.0, 1.0, 0.0),
+            danger: Color::from_rgb(1.0, 0.0, 0.0),
+            warning: Color::from_rgb(1.0, 1.0, 0.0),
+        }
+    )))
+}
+
 pub fn run(config: AppConfig) -> Result<(), iced_layershell::Error> {
     let width = config.ui.width as u32;
     let height = config.ui.height as u32;
+    let open_at_cursor = config.ui.open_at_cursor;
+
+    let (anchor, size) = if open_at_cursor {
+        // Full screen, no explicit size (fill output)
+        (Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right, None)
+    } else {
+        // Centered, explicit size
+        (Anchor::empty(), Some((width, height)))
+    };
 
     iced_layershell::application(
-        move || WaypieHud::new(config.clone()), // Capture config
+        move || WaypieHud::new(config.clone()), 
         "waypie", 
         WaypieHud::update, 
         WaypieHud::view
     )
     .subscription(WaypieHud::subscription)
+    .theme(|_: &WaypieHud| custom_theme())
     .settings(Settings {
         layer_settings: LayerShellSettings {
-            anchor: Anchor::empty(),
+            anchor,
             layer: Layer::Top,
-            size: Some((width, height)),
+            size,
             exclusive_zone: -1,
             keyboard_interactivity: KeyboardInteractivity::OnDemand,
             ..Default::default()

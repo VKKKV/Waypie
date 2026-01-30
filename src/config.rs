@@ -32,6 +32,7 @@ fn default_tray_inner_radius() -> f64 { DEFAULT_TRAY_INNER_RADIUS }
 fn default_vol_radius() -> f64 { DEFAULT_VOL_RADIUS }
 fn default_font_family() -> String { DEFAULT_FONT_FAMILY.into() }
 fn default_hover_mode() -> String { DEFAULT_HOVER_MODE.into() }
+fn default_open_at_cursor() -> bool { true }
 
 fn default_bg_color() -> Color4 { DEFAULT_BG_COLOR }
 fn default_vol_track() -> Color4 { DEFAULT_VOL_TRACK }
@@ -42,8 +43,8 @@ fn default_tray_even() -> Color4 { DEFAULT_TRAY_EVEN }
 fn default_tray_odd() -> Color4 { DEFAULT_TRAY_ODD }
 fn default_hover_overlay() -> Color4 { DEFAULT_HOVER_OVERLAY }
 
-fn default_action_left_click() -> Option<String> { Some("pwvucontrol".into()) }
-fn default_action_right_click() -> Option<String> { Some("pwvucontrol".into()) }
+fn default_action_left_click() -> Option<String> { Some("pavucontrol".into()) }
+fn default_action_right_click() -> Option<String> { None }
 fn default_action_scroll_up() -> Option<String> { Some("pamixer -i 5".into()) }
 fn default_action_scroll_down() -> Option<String> { Some("pamixer -d 5".into()) }
 
@@ -87,6 +88,8 @@ pub struct TrayActionConfig {
 pub struct UiConfig {
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate_ms: u64,
+    #[serde(default = "default_open_at_cursor")]
+    pub open_at_cursor: bool,
     #[serde(default = "default_size")]
     pub width: i32,
     #[serde(default = "default_size")]

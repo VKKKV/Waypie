@@ -124,6 +124,42 @@ pub fn center_cursor() {
     }
 }
 
+pub fn trigger_cursor_event() {
+    // Attempt to connect to Wayland display
+    let conn = match Connection::connect_to_env() {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("Failed to connect to Wayland for cursor triggering: {}", e);
+            return;
+        }
+    };
+
+    let display = conn.display();
+    let mut event_queue = conn.new_event_queue();
+    let qh = event_queue.handle();
+
+    let mut data = AppData {
+        seat: None,
+        manager: None,
+    };
+
+    let _registry = display.get_registry(&qh, ());
+
+    if let Err(_) = event_queue.roundtrip(&mut data) {
+        return;
+    }
+
+    if let (Some(seat), Some(manager)) = (data.seat.as_ref(), data.manager.as_ref()) {
+        let virtual_pointer = manager.create_virtual_pointer(Some(seat), &qh, ());
+        
+        // Send relative motion (0, 0) to trigger an update event
+        virtual_pointer.motion(0, 0.0, 0.0);
+        virtual_pointer.frame();
+        
+        let _ = event_queue.roundtrip(&mut data);
+    }
+}
+
 /// Convert hex color (0xRRGGBB) to RGB tuple with normalized values (0.0-1.0)
 pub const fn hex_to_rgb(hex: u32) -> Color3 {
     let r = ((hex >> 16) & 0xFF) as f64 / 255.0;
