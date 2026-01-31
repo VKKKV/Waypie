@@ -1,4 +1,4 @@
-use crate::color::{Color3, Color4};
+use crate::color::{ColorRGB, ColorRGBA};
 use std::process::Command;
 
 pub fn execute_command(cmd: &str) {
@@ -13,7 +13,7 @@ pub fn execute_command(cmd: &str) {
 }
 
 /// Convert hex color (0xRRGGBB) to RGB tuple with normalized values (0.0-1.0)
-pub const fn hex_to_rgb(hex: u32) -> Color3 {
+pub const fn hex_to_rgb(hex: u32) -> ColorRGB {
     let r = ((hex >> 16) & 0xFF) as f64 / 255.0;
     let g = ((hex >> 8) & 0xFF) as f64 / 255.0;
     let b = (hex & 0xFF) as f64 / 255.0;
@@ -21,7 +21,7 @@ pub const fn hex_to_rgb(hex: u32) -> Color3 {
 }
 
 /// Convert hex color (0xRRGGBBAA) to RGBA tuple with normalized values (0.0-1.0)
-pub const fn hex_to_rgba(hex: u32) -> Color4 {
+pub const fn hex_to_rgba(hex: u32) -> ColorRGBA {
     let r = ((hex >> 24) & 0xFF) as f64 / 255.0;
     let g = ((hex >> 16) & 0xFF) as f64 / 255.0;
     let b = ((hex >> 8) & 0xFF) as f64 / 255.0;

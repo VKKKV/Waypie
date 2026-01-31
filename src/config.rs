@@ -1,4 +1,4 @@
-use crate::color::{Color3, Color4, deserialize_color3, deserialize_color4};
+use crate::color::{ColorRGB, ColorRGBA, deserialize_color_rgb, deserialize_color_rgba};
 use crate::utils::{hex_to_rgb, hex_to_rgba};
 use serde::Deserialize;
 use std::fs;
@@ -14,14 +14,14 @@ const DEFAULT_FONT_FAMILY: &str = "Sans";
 const DEFAULT_HOVER_MODE: &str = "highlight";
 
 // Color defaults using hex notation (0xRRGGBBAA format)
-const DEFAULT_BG_COLOR: Color4 = hex_to_rgba(0x1A1A1AE6);           // Dark with 90% alpha
-const DEFAULT_VOL_TRACK: Color4 = hex_to_rgba(0x4D4D4D80);         // Grey with 50% alpha
-const DEFAULT_VOL_COLOR: Color3 = hex_to_rgb(0x0E91D2);            // Arch Blue
-const DEFAULT_VOL_WARN: Color3 = hex_to_rgb(0xCC3333);             // Red
-const DEFAULT_TEXT_COLOR: Color3 = hex_to_rgb(0xFFFFFF);           // White
-const DEFAULT_TRAY_EVEN: Color4 = hex_to_rgba(0x262626E6);         // Dark even rows
-const DEFAULT_TRAY_ODD: Color4 = hex_to_rgba(0x333333E6);          // Dark odd rows
-const DEFAULT_HOVER_OVERLAY: Color4 = hex_to_rgba(0xFFFFFF19);     // White 10% opacity
+const DEFAULT_BG_COLOR: ColorRGBA = hex_to_rgba(0xFFFFFF1A);           // Dark with 90% alpha
+const DEFAULT_VOL_TRACK: ColorRGBA = hex_to_rgba(0x4D4D4D80);         // Grey with 50% alpha
+const DEFAULT_VOL_COLOR: ColorRGB = hex_to_rgb(0x0E91D2);            // Arch Blue
+const DEFAULT_VOL_WARN: ColorRGB = hex_to_rgb(0xCC3333);             // Red
+const DEFAULT_TEXT_COLOR: ColorRGB = hex_to_rgb(0xFFFFFF);           // White
+const DEFAULT_TRAY_EVEN: ColorRGBA = hex_to_rgba(0x262626E6);         // Dark even rows
+const DEFAULT_TRAY_ODD: ColorRGBA = hex_to_rgba(0x333333E6);          // Dark odd rows
+const DEFAULT_HOVER_OVERLAY: ColorRGBA = hex_to_rgba(0xFFFFFF19);     // White 10% opacity
 
 // Serde default function helpers - return constants without allocation
 fn default_icon() -> String { DEFAULT_ICON.into() }
@@ -33,14 +33,14 @@ fn default_vol_radius() -> f64 { DEFAULT_VOL_RADIUS }
 fn default_font_family() -> String { DEFAULT_FONT_FAMILY.into() }
 fn default_hover_mode() -> String { DEFAULT_HOVER_MODE.into() }
 
-fn default_bg_color() -> Color4 { DEFAULT_BG_COLOR }
-fn default_vol_track() -> Color4 { DEFAULT_VOL_TRACK }
-fn default_vol_color() -> Color3 { DEFAULT_VOL_COLOR }
-fn default_vol_warn() -> Color3 { DEFAULT_VOL_WARN }
-fn default_text_color() -> Color3 { DEFAULT_TEXT_COLOR }
-fn default_tray_even() -> Color4 { DEFAULT_TRAY_EVEN }
-fn default_tray_odd() -> Color4 { DEFAULT_TRAY_ODD }
-fn default_hover_overlay() -> Color4 { DEFAULT_HOVER_OVERLAY }
+fn default_bg_color() -> ColorRGBA { DEFAULT_BG_COLOR }
+fn default_vol_track() -> ColorRGBA { DEFAULT_VOL_TRACK }
+fn default_vol_color() -> ColorRGB { DEFAULT_VOL_COLOR }
+fn default_vol_warn() -> ColorRGB { DEFAULT_VOL_WARN }
+fn default_text_color() -> ColorRGB { DEFAULT_TEXT_COLOR }
+fn default_tray_even() -> ColorRGBA { DEFAULT_TRAY_EVEN }
+fn default_tray_odd() -> ColorRGBA { DEFAULT_TRAY_ODD }
+fn default_hover_overlay() -> ColorRGBA { DEFAULT_HOVER_OVERLAY }
 
 fn default_action_left_click() -> Option<String> { Some("pwvucontrol".into()) }
 fn default_action_right_click() -> Option<String> { None }
@@ -107,22 +107,22 @@ pub struct UiConfig {
 
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct ColorConfig {
-    #[serde(default = "default_bg_color", deserialize_with = "deserialize_color4")]
-    pub background: Color4,
-    #[serde(default = "default_vol_track", deserialize_with = "deserialize_color4")]
-    pub volume_track: Color4,
-    #[serde(default = "default_vol_color", deserialize_with = "deserialize_color3")]
-    pub volume_arc: Color3,
-    #[serde(default = "default_vol_warn", deserialize_with = "deserialize_color3")]
-    pub volume_warning: Color3,
-    #[serde(default = "default_text_color", deserialize_with = "deserialize_color3")]
-    pub text: Color3,
-    #[serde(default = "default_tray_even", deserialize_with = "deserialize_color4")]
-    pub tray_even: Color4,
-    #[serde(default = "default_tray_odd", deserialize_with = "deserialize_color4")]
-    pub tray_odd: Color4,
-    #[serde(default = "default_hover_overlay", deserialize_with = "deserialize_color4")]
-    pub hover_overlay: Color4,
+    #[serde(default = "default_bg_color", deserialize_with = "deserialize_color_rgba")]
+    pub background: ColorRGBA,
+    #[serde(default = "default_vol_track", deserialize_with = "deserialize_color_rgba")]
+    pub volume_track: ColorRGBA,
+    #[serde(default = "default_vol_color", deserialize_with = "deserialize_color_rgb")]
+    pub volume_arc: ColorRGB,
+    #[serde(default = "default_vol_warn", deserialize_with = "deserialize_color_rgb")]
+    pub volume_warning: ColorRGB,
+    #[serde(default = "default_text_color", deserialize_with = "deserialize_color_rgb")]
+    pub text: ColorRGB,
+    #[serde(default = "default_tray_even", deserialize_with = "deserialize_color_rgba")]
+    pub tray_even: ColorRGBA,
+    #[serde(default = "default_tray_odd", deserialize_with = "deserialize_color_rgba")]
+    pub tray_odd: ColorRGBA,
+    #[serde(default = "default_hover_overlay", deserialize_with = "deserialize_color_rgba")]
+    pub hover_overlay: ColorRGBA,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]

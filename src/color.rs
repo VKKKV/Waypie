@@ -1,60 +1,51 @@
 use serde::{Deserialize, Deserializer};
 
-pub type Color3 = (f64, f64, f64);
-pub type Color4 = (f64, f64, f64, f64);
+pub type ColorRGB = (f64, f64, f64);
+pub type ColorRGBA = (f64, f64, f64, f64);
 
 /// Parse hex color string (#RRGGBB or #RRGGBBAA) to normalized RGB/RGBA tuple
-fn hex_to_color(hex: &str) -> Result<Color4, String> {
-    let hex = hex.trim_start_matches('#');
+fn hex_to_color(hex: &str) -> Result<ColorRGBA, String> {
+    let hex = hex.trim_start_matches('#').trim_start_matches("0x");
 
-    match hex.len() {
-        6 => {
-            // #RRGGBB -> RGB with alpha 1.0
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|_| "Invalid hex color")?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|_| "Invalid hex color")?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|_| "Invalid hex color")?;
-            Ok((r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0, 1.0))
-        }
-        8 => {
-            // #RRGGBBAA -> RGBA
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|_| "Invalid hex color")?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|_| "Invalid hex color")?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|_| "Invalid hex color")?;
-            let a = u8::from_str_radix(&hex[6..8], 16)
-                .map_err(|_| "Invalid hex color")?;
-            Ok((
-                r as f64 / 255.0,
-                g as f64 / 255.0,
-                b as f64 / 255.0,
-                a as f64 / 255.0,
-            ))
-        }
-        _ => Err(format!("Invalid hex color length: {}", hex.len())),
+    let (_, has_alpha) = match hex.len() {
+        6 => (6, false),
+        8 => (8, true),
+        _ => return Err(format!("invalid hex length: {}", hex.len())),
+    };
+
+    let value = u32::from_str_radix(hex, 16).map_err(|_| "invalid hex string")?;
+
+    if has_alpha {
+        let r = ((value >> 24) & 0xFF) as f64 / 255.0;
+        let g = ((value >> 16) & 0xFF) as f64 / 255.0;
+        let b = ((value >> 8) & 0xFF) as f64 / 255.0;
+        let a = (value & 0xFF) as f64 / 255.0;
+        Ok((r, g, b, a))
+    } else {
+        let r = ((value >> 16) & 0xFF) as f64 / 255.0;
+        let g = ((value >> 8) & 0xFF) as f64 / 255.0;
+        let b = (value & 0xFF) as f64 / 255.0;
+        Ok((r, g, b, 1.0))
     }
 }
 
 /// Deserialize hex color string to Color4 (r, g, b, a)
-pub fn deserialize_color4<'de, D>(deserializer: D) -> Result<Color4, D::Error>
+pub fn deserialize_color_rgba<'de, D>(deserializer: D) -> Result<ColorRGBA, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let hex = String::deserialize(deserializer)?;
-    hex_to_color(&hex).map_err(serde::de::Error::custom)
+    // 使用 &str 减少一次 String 的堆内存分配
+    let s = <&str>::deserialize(deserializer)?;
+    hex_to_color(s).map_err(serde::de::Error::custom)
 }
 
 /// Deserialize hex color string to Color3 (r, g, b), ignoring alpha
-pub fn deserialize_color3<'de, D>(deserializer: D) -> Result<Color3, D::Error>
+pub fn deserialize_color_rgb<'de, D>(deserializer: D) -> Result<ColorRGB, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let hex = String::deserialize(deserializer)?;
-    let (r, g, b, _) = hex_to_color(&hex).map_err(serde::de::Error::custom)?;
+    let s = <&str>::deserialize(deserializer)?;
+    let (r, g, b, _) = hex_to_color(s).map_err(serde::de::Error::custom)?;
     Ok((r, g, b))
 }
 
