@@ -1,0 +1,266 @@
+use gtk4::glib;
+use gtk4::prelude::*;
+use gtk4::subclass::prelude::*;
+use gtk4::{EventControllerMotion, GestureClick, Snapshot};
+use std::cell::{Cell, RefCell};
+use std::f64::consts::PI;
+use std::time::Instant;
+
+use super::PieItem;
+use crate::sni_watcher::TrayItems;
+
+#[derive(Default)]
+pub struct RadialMenu {
+    // Data
+    pub items: RefCell<Vec<PieItem>>,
+    pub tray_items: RefCell<Option<TrayItems>>,
+    pub ui_config: RefCell<crate::config::UiConfig>,
+
+    // State
+    pub active_parent_idx: Cell<Option<usize>>,
+    pub hover_parent_idx: Cell<Option<usize>>,
+    pub hover_child_idx: Cell<Option<usize>>,
+    pub hover_start_time: Cell<Option<Instant>>,
+
+    // Animation
+    pub outer_ring_progress: Cell<f64>, // 0.0 to 1.0
+    pub target_progress: Cell<f64>,     // 0.0 or 1.0
+}
+
+#[glib::object_subclass]
+impl ObjectSubclass for RadialMenu {
+    const NAME: &'static str = "RadialMenu";
+    type Type = super::RadialMenu;
+    type ParentType = gtk4::Widget;
+}
+
+impl ObjectImpl for RadialMenu {
+    fn constructed(&self) {
+        self.parent_constructed();
+        let obj = self.obj();
+
+        // Clock Timer
+        gtk4::glib::timeout_add_local(std::time::Duration::from_secs(1), glib::clone!(@weak obj => @default-return glib::ControlFlow::Break, move || {
+            obj.queue_draw();
+            glib::ControlFlow::Continue
+        }));
+
+        // Motion Controller
+        let motion = EventControllerMotion::new();
+        motion.connect_motion(glib::clone!(@weak obj => move |_, x, y| {
+            obj.handle_motion(x, y);
+        }));
+        motion.connect_leave(glib::clone!(@weak obj => move |_| {
+            obj.handle_leave();
+        }));
+        obj.add_controller(motion);
+
+        // Click Controller
+        let click = GestureClick::new();
+        click.set_button(0);
+        click.connect_pressed(glib::clone!(@weak obj => move |gesture, n_press, x, y| {
+            obj.handle_click(gesture, n_press, x, y);
+        }));
+        obj.add_controller(click);
+
+        // Hover Timer
+        obj.add_tick_callback(|obj, _clock| {
+            obj.check_hover_timer();
+            glib::ControlFlow::Continue
+        });
+
+        // Animation Loop
+        obj.add_tick_callback(|obj, _clock| {
+            let imp = obj.imp();
+            let current = imp.outer_ring_progress.get();
+            let target = imp.target_progress.get();
+
+            if (target - current).abs() < 0.001 {
+                if current != target {
+                    imp.outer_ring_progress.set(target);
+                    obj.queue_draw();
+                }
+                return glib::ControlFlow::Continue;
+            }
+
+            // Lerp: current + (target - current) * speed
+            let next = current + (target - current) * 0.2;
+            imp.outer_ring_progress.set(next);
+            obj.queue_draw();
+
+            glib::ControlFlow::Continue
+        });
+    }
+}
+
+impl WidgetImpl for RadialMenu {
+    fn snapshot(&self, snapshot: &Snapshot) {
+        let obj = self.obj();
+        let w = obj.width() as f64;
+        let h = obj.height() as f64;
+
+        let cr =
+            snapshot.append_cairo(&gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32));
+
+        let center_x = w / 2.0;
+        let center_y = h / 2.0;
+
+        let items = self.items.borrow();
+        let parent_count = items.len();
+        let ui = self.ui_config.borrow();
+
+        // --- Draw Center ---
+        let center_radius = ui.center_radius;
+        
+        // Background for center
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        cr.arc(center_x, center_y, center_radius, 0.0, 2.0 * PI);
+        cr.fill().unwrap();
+
+        // Time
+        let now = chrono::Local::now();
+        let time_str = now.format("%H:%M").to_string();
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.set_font_size(20.0);
+        let ext = cr.text_extents(&time_str).unwrap();
+        cr.move_to(center_x - ext.width() / 2.0, center_y + ext.height() / 4.0);
+        cr.show_text(&time_str).unwrap();
+
+        if parent_count == 0 {
+            return;
+        }
+
+        // --- Draw Inner Ring (Parents) ---
+        let inner_radius_start = center_radius;
+        let inner_radius_end = ui.inner_radius;
+        let angle_per_parent = 2.0 * PI / parent_count as f64;
+        let start_offset = -PI / 2.0; // 12 o'clock
+
+        for (i, item) in items.iter().enumerate() {
+            let start_angle = start_offset + (i as f64 * angle_per_parent);
+            let end_angle = start_angle + angle_per_parent;
+
+            // Determine Color
+            if Some(i) == self.hover_parent_idx.get() {
+                cr.set_source_rgba(0.2, 0.2, 0.2, 0.9); // Hover
+            } else if Some(i) == self.active_parent_idx.get() {
+                cr.set_source_rgba(0.3, 0.3, 0.3, 0.9); // Active
+            } else if i % 2 == 0 {
+                cr.set_source_rgba(0.1, 0.1, 0.1, 0.8); // Normal Even
+            } else {
+                cr.set_source_rgba(0.15, 0.15, 0.15, 0.8); // Normal Odd
+            }
+
+            // Draw Segment
+            cr.new_path();
+            cr.arc(center_x, center_y, inner_radius_end, start_angle, end_angle);
+            cr.arc_negative(
+                center_x,
+                center_y,
+                inner_radius_start,
+                end_angle,
+                start_angle,
+            );
+            cr.close_path();
+            cr.fill().unwrap();
+
+            // Stroke
+            cr.set_source_rgb(0.0, 0.0, 0.0);
+            cr.set_line_width(1.0);
+            cr.stroke().unwrap();
+
+            // Text
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.set_font_size(12.0);
+            let text_radius = (inner_radius_start + inner_radius_end) / 2.0;
+            let mid_angle = start_angle + angle_per_parent / 2.0;
+            let tx = center_x + text_radius * mid_angle.cos();
+            let ty = center_y + text_radius * mid_angle.sin();
+
+            let ext = cr.text_extents(&item.label).unwrap();
+            cr.move_to(tx - ext.width() / 2.0, ty + ext.height() / 4.0);
+            cr.show_text(&item.label).unwrap();
+        }
+
+        // --- Draw Outer Ring (Children) ---
+        // Use animation progress
+        let progress = self.outer_ring_progress.get();
+
+        if progress > 0.01 {
+            if let Some(active_idx) = self.active_parent_idx.get() {
+                if let Some(parent) = items.get(active_idx) {
+                    // Determine Children Source
+                    let children = &parent.children;
+                    let child_count = children.len();
+
+                    if child_count > 0 {
+                        // "Slide out" effect based on configured radii
+                        let base_start = ui.inner_radius - 20.0;
+                        let target_start = ui.inner_radius + 10.0;
+                        let base_end = ui.outer_radius - 50.0;
+                        let target_end = ui.outer_radius;
+
+                        let outer_radius_start =
+                            base_start + (target_start - base_start) * progress;
+                        let outer_radius_end = base_end + (target_end - base_end) * progress;
+
+                        let angle_per_child = 2.0 * PI / child_count as f64;
+
+                        // Alpha multiplier
+                        let alpha = progress;
+
+                        for (j, child) in children.iter().enumerate() {
+                            let start_angle = start_offset + (j as f64 * angle_per_child);
+                            let end_angle = start_angle + angle_per_child;
+
+                            // Color
+                            if Some(j) == self.hover_child_idx.get() {
+                                cr.set_source_rgba(0.2, 0.4, 0.8, 0.9 * alpha);
+                            // Hover Child (Blue)
+                            } else if j % 2 == 0 {
+                                cr.set_source_rgba(0.1, 0.1, 0.1, 0.8 * alpha);
+                            } else {
+                                cr.set_source_rgba(0.15, 0.15, 0.15, 0.8 * alpha);
+                            }
+
+                            cr.new_path();
+                            cr.arc(
+                                center_x,
+                                center_y,
+                                outer_radius_end,
+                                start_angle,
+                                end_angle,
+                            );
+                            cr.arc_negative(
+                                center_x,
+                                center_y,
+                                outer_radius_start,
+                                end_angle,
+                                start_angle,
+                            );
+                            cr.close_path();
+                            cr.fill().unwrap();
+
+                            // Stroke
+                            cr.set_source_rgba(0.0, 0.0, 0.0, alpha);
+                            cr.set_line_width(1.0);
+                            cr.stroke().unwrap();
+
+                            // Text
+                            cr.set_source_rgba(1.0, 1.0, 1.0, alpha);
+                            cr.set_font_size(11.0);
+                            let text_radius = (outer_radius_start + outer_radius_end) / 2.0;
+                            let mid_angle = start_angle + angle_per_child / 2.0;
+                            let tx = center_x + text_radius * mid_angle.cos();
+                            let ty = center_y + text_radius * mid_angle.sin();
+
+                            let ext = cr.text_extents(&child.label).unwrap();
+                            cr.move_to(tx - ext.width() / 2.0, ty + ext.height() / 4.0);
+                            cr.show_text(&child.label).unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

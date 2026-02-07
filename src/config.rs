@@ -1,165 +1,208 @@
-use crate::color::{ColorRGB, ColorRGBA, deserialize_color_rgb, deserialize_color_rgba};
-use crate::utils::{hex_to_rgb, hex_to_rgba};
-use serde::Deserialize;
+use directories::ProjectDirs;
+use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
+use tokio::sync::mpsc;
 
-// Defaults - Constants for zero-copy and early evaluation
-const DEFAULT_ICON: &str = "archlinux-logo";
-const DEFAULT_REFRESH_RATE_MS: u64 = 200;
-const DEFAULT_SIZE: i32 = 600;
-const DEFAULT_OUTER_RADIUS: f64 = 180.0;
-const DEFAULT_TRAY_INNER_RADIUS: f64 = 110.0;
-const DEFAULT_VOL_RADIUS: f64 = 95.0;
-const DEFAULT_FONT_FAMILY: &str = "Sans";
-const DEFAULT_HOVER_MODE: &str = "highlight";
-
-// Color defaults using hex notation (0xRRGGBBAA format)
-const DEFAULT_BG_COLOR: ColorRGBA = hex_to_rgba(0xFFFFFF1A);           // Dark with 90% alpha
-const DEFAULT_VOL_TRACK: ColorRGBA = hex_to_rgba(0x4D4D4D80);         // Grey with 50% alpha
-const DEFAULT_VOL_COLOR: ColorRGB = hex_to_rgb(0x0E91D2);            // Arch Blue
-const DEFAULT_VOL_WARN: ColorRGB = hex_to_rgb(0xCC3333);             // Red
-const DEFAULT_TEXT_COLOR: ColorRGB = hex_to_rgb(0xFFFFFF);           // White
-const DEFAULT_TRAY_EVEN: ColorRGBA = hex_to_rgba(0x262626E6);         // Dark even rows
-const DEFAULT_TRAY_ODD: ColorRGBA = hex_to_rgba(0x333333E6);          // Dark odd rows
-const DEFAULT_HOVER_OVERLAY: ColorRGBA = hex_to_rgba(0xFFFFFF19);     // White 10% opacity
-
-// Serde default function helpers - return constants without allocation
-fn default_icon() -> String { DEFAULT_ICON.into() }
-fn default_refresh_rate() -> u64 { DEFAULT_REFRESH_RATE_MS }
-fn default_size() -> i32 { DEFAULT_SIZE }
-fn default_outer_radius() -> f64 { DEFAULT_OUTER_RADIUS }
-fn default_tray_inner_radius() -> f64 { DEFAULT_TRAY_INNER_RADIUS }
-fn default_vol_radius() -> f64 { DEFAULT_VOL_RADIUS }
-fn default_font_family() -> String { DEFAULT_FONT_FAMILY.into() }
-fn default_hover_mode() -> String { DEFAULT_HOVER_MODE.into() }
-
-fn default_bg_color() -> ColorRGBA { DEFAULT_BG_COLOR }
-fn default_vol_track() -> ColorRGBA { DEFAULT_VOL_TRACK }
-fn default_vol_color() -> ColorRGB { DEFAULT_VOL_COLOR }
-fn default_vol_warn() -> ColorRGB { DEFAULT_VOL_WARN }
-fn default_text_color() -> ColorRGB { DEFAULT_TEXT_COLOR }
-fn default_tray_even() -> ColorRGBA { DEFAULT_TRAY_EVEN }
-fn default_tray_odd() -> ColorRGBA { DEFAULT_TRAY_ODD }
-fn default_hover_overlay() -> ColorRGBA { DEFAULT_HOVER_OVERLAY }
-
-fn default_action_left_click() -> Option<String> { Some("pwvucontrol".into()) }
-fn default_action_right_click() -> Option<String> { None }
-fn default_action_scroll_up() -> Option<String> { Some("pamixer -i 5".into()) }
-fn default_action_scroll_down() -> Option<String> { Some("pamixer -d 5".into()) }
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct AppConfig {
-    #[serde(default = "default_icon")]
-    pub icon: String,
-    #[serde(default)]
-    pub items: Vec<MenuItemConfig>,
+// 1. Data Structures
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Config {
     #[serde(default)]
     pub ui: UiConfig,
-    #[serde(default)]
-    pub actions: ActionConfig,
-    #[serde(default)]
-    pub tray_apps: Vec<TrayAppConfig>,
+    #[serde(default = "default_menu_items")]
+    pub menu: Vec<MenuItemConfig>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct MenuItemConfig {
-    pub label: String,
-    pub script: Option<String>,
-    #[serde(default)]
-    pub items: Vec<MenuItemConfig>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct TrayAppConfig {
-    pub label: String,
-    pub icon: String,
-    #[serde(default)]
-    pub actions: Vec<TrayActionConfig>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct TrayActionConfig {
-    pub label: String,
-    pub command: String,
-}
-
-#[derive(Deserialize, Debug, Clone, Default)]
-pub struct UiConfig {
-    #[serde(default = "default_refresh_rate")]
-    pub refresh_rate_ms: u64,
-    #[serde(default = "default_size")]
-    pub width: i32,
-    #[serde(default = "default_size")]
-    pub height: i32,
-    #[serde(default = "default_outer_radius")]
-    pub outer_radius: f64,
-    #[serde(default = "default_tray_inner_radius")]
-    pub tray_inner_radius: f64,
-    #[serde(default = "default_vol_radius")]
-    pub vol_radius: f64,
-    #[serde(default = "default_font_family")]
-    pub font_family: String,
-    #[serde(default = "default_hover_mode")]
-    pub hover_mode: String,
-    #[serde(default)]
-    pub colors: ColorConfig,
-}
-
-#[derive(Deserialize, Debug, Clone, Default)]
-pub struct ColorConfig {
-    #[serde(default = "default_bg_color", deserialize_with = "deserialize_color_rgba")]
-    pub background: ColorRGBA,
-    #[serde(default = "default_vol_track", deserialize_with = "deserialize_color_rgba")]
-    pub volume_track: ColorRGBA,
-    #[serde(default = "default_vol_color", deserialize_with = "deserialize_color_rgb")]
-    pub volume_arc: ColorRGB,
-    #[serde(default = "default_vol_warn", deserialize_with = "deserialize_color_rgb")]
-    pub volume_warning: ColorRGB,
-    #[serde(default = "default_text_color", deserialize_with = "deserialize_color_rgb")]
-    pub text: ColorRGB,
-    #[serde(default = "default_tray_even", deserialize_with = "deserialize_color_rgba")]
-    pub tray_even: ColorRGBA,
-    #[serde(default = "default_tray_odd", deserialize_with = "deserialize_color_rgba")]
-    pub tray_odd: ColorRGBA,
-    #[serde(default = "default_hover_overlay", deserialize_with = "deserialize_color_rgba")]
-    pub hover_overlay: ColorRGBA,
-}
-
-#[derive(Deserialize, Debug, Clone, Default)]
-pub struct ActionConfig {
-    #[serde(default = "default_action_left_click")]
-    pub left_click: Option<String>,
-    #[serde(default = "default_action_right_click")]
-    pub right_click: Option<String>,
-    #[serde(default = "default_action_scroll_up")]
-    pub scroll_up: Option<String>,
-    #[serde(default = "default_action_scroll_down")]
-    pub scroll_down: Option<String>,
-}
-
-
-pub fn load() -> AppConfig {
-    let xdg_dirs = xdg::BaseDirectories::with_prefix("waypie");
-    match xdg_dirs.find_config_file("config.toml") {
-        Some(path) => toml::from_str(&fs::read_to_string(path).expect("Cannot read config"))
-            .expect("Config format error"),
-        None => AppConfig {
-            icon: default_icon(),
-            items: vec![
-                MenuItemConfig {
-                    label: "Terminal".into(),
-                    script: Some("ghostty".into()),
-                    items: vec![],
-                },
-                MenuItemConfig {
-                    label: "Browser".into(),
-                    script: Some("firefox".into()),
-                    items: vec![],
-                },
-            ],
+impl Default for Config {
+    fn default() -> Self {
+        Self {
             ui: UiConfig::default(),
-            actions: ActionConfig::default(),
-            tray_apps: vec![],
-        },
+            menu: default_menu_items(),
+        }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiConfig {
+    #[serde(default = "default_width")]
+    pub width: i32,
+    #[serde(default = "default_height")]
+    pub height: i32,
+    #[serde(default = "default_center_radius")]
+    pub center_radius: f64,
+    #[serde(default = "default_inner_radius")]
+    pub inner_radius: f64,
+    #[serde(default = "default_outer_radius")]
+    pub outer_radius: f64,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            width: default_width(),
+            height: default_height(),
+            center_radius: default_center_radius(),
+            inner_radius: default_inner_radius(),
+            outer_radius: default_outer_radius(),
+        }
+    }
+}
+
+fn default_width() -> i32 { 600 }
+fn default_height() -> i32 { 600 }
+fn default_center_radius() -> f64 { 40.0 }
+fn default_inner_radius() -> f64 { 100.0 }
+fn default_outer_radius() -> f64 { 200.0 }
+
+fn default_menu_items() -> Vec<MenuItemConfig> {
+    vec![
+        MenuItemConfig {
+            label: "Web".to_string(),
+            icon: "web-browser".to_string(),
+            action: "".to_string(),
+            children: vec![
+                MenuItemConfig {
+                    label: "Firefox".to_string(),
+                    icon: "firefox".to_string(),
+                    action: "firefox".to_string(),
+                    children: vec![],
+                    item_type: None,
+                },
+                MenuItemConfig {
+                    label: "zen-browser".to_string(),
+                    icon: "zen-browser".to_string(),
+                    action: "zen-browser".to_string(),
+                    children: vec![],
+                    item_type: None,
+                },
+            ],
+            item_type: None,
+        },
+        MenuItemConfig {
+            label: "Terminal".to_string(),
+            icon: "utilities-terminal".to_string(),
+            action: "ghostty".to_string(),
+            children: vec![],
+            item_type: None,
+        },
+        MenuItemConfig {
+            label: "Files".to_string(),
+            icon: "system-file-manager".to_string(),
+            action: "thunar".to_string(),
+            children: vec![],
+            item_type: None,
+        },
+        MenuItemConfig {
+            label: "Tray".to_string(),
+            icon: "emblem-system".to_string(), // Generic icon
+            action: "".to_string(),
+            children: vec![],
+            item_type: Some("tray".to_string()),
+        },
+    ]
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MenuItemConfig {
+    pub label: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub action: String,
+    #[serde(default)]
+    pub children: Vec<MenuItemConfig>,
+    #[serde(default, rename = "type")]
+    pub item_type: Option<String>,
+}
+
+// 2. Loading Logic
+pub fn load_config() -> Config {
+    let path = get_config_path();
+    if let Some(p) = &path {
+        if p.exists() {
+            match fs::read_to_string(p) {
+                Ok(content) => match toml::from_str(&content) {
+                    Ok(cfg) => return cfg,
+                    Err(e) => {
+                        eprintln!("Error parsing config at {:?}: {}", p, e);
+                        eprintln!("Falling back to default config.");
+                    }
+                },
+                Err(e) => eprintln!("Error reading config file: {}", e),
+            }
+        } else {
+            println!("Config not found. Creating default at {:?}", p);
+            if let Some(parent) = p.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let default_cfg = Config::default();
+            if let Ok(toml_string) = toml::to_string_pretty(&default_cfg) {
+                if let Err(e) = fs::write(p, toml_string) {
+                    eprintln!("Failed to write default config: {}", e);
+                }
+            }
+            return default_cfg;
+        }
+    }
+    Config::default()
+}
+
+fn get_config_path() -> Option<PathBuf> {
+    ProjectDirs::from("org", "waypie", "waypie").map(|proj| proj.config_dir().join("config.toml"))
+}
+
+// 3. Watcher Setup
+pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_channel::Sender<()>) {
+    let path = get_config_path().unwrap_or_else(|| PathBuf::from("config.toml"));
+    let (tx, mut rx) = mpsc::channel(1);
+
+    // Create a watcher that sends events to the channel
+    let mut watcher = RecommendedWatcher::new(
+        move |res| {
+            let _ = tx.blocking_send(res);
+        },
+        NotifyConfig::default(),
+    )
+    .expect("Failed to create file watcher");
+
+    // Watch the directory (parent of config file) to handle editors that use atomic saves (rename/move)
+    let watch_target = path.parent().unwrap_or(&path);
+    if let Err(e) = watcher.watch(watch_target, RecursiveMode::NonRecursive) {
+        eprintln!("Failed to watch config directory: {}", e);
+        return;
+    }
+
+    // Process events
+    while let Some(res) = rx.recv().await {
+        match res {
+            Ok(event) => {
+                // Check if the specific config file was modified/created
+                let relevant = event.paths.iter().any(|p| p.ends_with("config.toml"));
+
+                if relevant {
+                    println!("Config file changed. Reloading...");
+                    // Give fs a moment to settle (some editors write empty files first)
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+                    match fs::read_to_string(&path) {
+                        Ok(content) => match toml::from_str::<Config>(&content) {
+                            Ok(new_config) => {
+                                if let Ok(mut w) = config_store.write() {
+                                    *w = new_config;
+                                }
+                                let _ = sender.send(()).await;
+                                println!("Config reloaded successfully.");
+                            }
+                            Err(e) => eprintln!("Config reload failed (Parse Error): {}", e),
+                        },
+                        Err(e) => eprintln!("Config reload failed (Read Error): {}", e),
+                    }
+                }
+            }
+            Err(e) => eprintln!("Watch error: {}", e),
+        }
+    }
+}
+
