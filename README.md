@@ -6,7 +6,7 @@
 [![Wayland](https://img.shields.io/badge/Protocol-Wayland-green)](https://wayland.freedesktop.org/)
 [![Arch Linux](https://img.shields.io/badge/Arch-btw-1793d1)](https://archlinux.org)
 
-> A high-performance, highly customizable radial menu and HUD for Wayland<br>
+> A radial menu for Wayland<br>
 
 ![Waypie Demo](img/demo.png)
 
