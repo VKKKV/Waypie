@@ -1,5 +1,5 @@
-use std::process::Command;
 use anyhow::{Context, Result};
+use std::process::Command;
 
 /// Spawns an application in a detached way.
 /// Handles shell argument parsing (e.g. quotes) using `shlex`.

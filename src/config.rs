@@ -1,3 +1,4 @@
+use crate::color::{self, ColorRGB, ColorRGBA};
 use directories::ProjectDirs;
 use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
@@ -5,7 +6,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
-use crate::color::{self, ColorRGBA, ColorRGB};
 
 // 1. Data Structures
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -39,29 +39,59 @@ pub struct UiConfig {
     pub outer_radius: f64,
 
     // Colors
-    #[serde(default = "default_center_color", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_center_color",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub center_color: ColorRGBA,
-    
-    #[serde(default = "default_text_color", deserialize_with = "color::deserialize_color")]
+
+    #[serde(
+        default = "default_text_color",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub text_color: ColorRGB, // Usually text is solid, but maybe RGBA? Let's stick to RGB for now or RGBA if imp.rs uses alpha for text fade. imp.rs uses set_source_rgb for text mostly, except outer ring which uses alpha multiplier. Let's use RGB for base text color. Wait, Outer ring text fades in. So maybe base color is RGB and we apply alpha in code.
-    
-    #[serde(default = "default_stroke_color", deserialize_with = "color::deserialize_color")]
+
+    #[serde(
+        default = "default_stroke_color",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub stroke_color: ColorRGB,
 
-    #[serde(default = "default_inner_even", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_inner_even",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub inner_ring_color_even: ColorRGBA,
-    #[serde(default = "default_inner_odd", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_inner_odd",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub inner_ring_color_odd: ColorRGBA,
-    #[serde(default = "default_inner_hover", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_inner_hover",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub inner_ring_color_hover: ColorRGBA,
-    #[serde(default = "default_inner_active", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_inner_active",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub inner_ring_color_active: ColorRGBA,
 
-    #[serde(default = "default_outer_even", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_outer_even",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub outer_ring_color_even: ColorRGBA,
-    #[serde(default = "default_outer_odd", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_outer_odd",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub outer_ring_color_odd: ColorRGBA,
-    #[serde(default = "default_outer_hover", deserialize_with = "color::deserialize_color")]
+    #[serde(
+        default = "default_outer_hover",
+        deserialize_with = "color::deserialize_color"
+    )]
     pub outer_ring_color_hover: ColorRGBA,
 }
 
@@ -87,26 +117,55 @@ impl Default for UiConfig {
     }
 }
 
-fn default_width() -> i32 { 600 }
-fn default_height() -> i32 { 600 }
-fn default_center_radius() -> f64 { 40.0 }
-fn default_inner_radius() -> f64 { 100.0 }
-fn default_outer_radius() -> f64 { 200.0 }
+fn default_width() -> i32 {
+    600
+}
+fn default_height() -> i32 {
+    600
+}
+fn default_center_radius() -> f64 {
+    40.0
+}
+fn default_inner_radius() -> f64 {
+    100.0
+}
+fn default_outer_radius() -> f64 {
+    200.0
+}
 
 // Default Colors
-fn default_center_color() -> ColorRGBA { (0.0, 0.0, 0.0, 0.5) }
-fn default_text_color() -> ColorRGB { (1.0, 1.0, 1.0) }
-fn default_stroke_color() -> ColorRGB { (0.0, 0.0, 0.0) }
+fn default_center_color() -> ColorRGBA {
+    (0.0, 0.0, 0.0, 0.5)
+}
+fn default_text_color() -> ColorRGB {
+    (1.0, 1.0, 1.0)
+}
+fn default_stroke_color() -> ColorRGB {
+    (0.0, 0.0, 0.0)
+}
 
-fn default_inner_even() -> ColorRGBA { (0.1, 0.1, 0.1, 0.8) }
-fn default_inner_odd() -> ColorRGBA { (0.15, 0.15, 0.15, 0.8) }
-fn default_inner_hover() -> ColorRGBA { (0.2, 0.2, 0.2, 0.9) }
-fn default_inner_active() -> ColorRGBA { (0.3, 0.3, 0.3, 0.9) }
+fn default_inner_even() -> ColorRGBA {
+    (0.1, 0.1, 0.1, 0.8)
+}
+fn default_inner_odd() -> ColorRGBA {
+    (0.15, 0.15, 0.15, 0.8)
+}
+fn default_inner_hover() -> ColorRGBA {
+    (0.2, 0.2, 0.2, 0.9)
+}
+fn default_inner_active() -> ColorRGBA {
+    (0.3, 0.3, 0.3, 0.9)
+}
 
-fn default_outer_even() -> ColorRGBA { (0.1, 0.1, 0.1, 0.8) }
-fn default_outer_odd() -> ColorRGBA { (0.15, 0.15, 0.15, 0.8) }
-fn default_outer_hover() -> ColorRGBA { (0.2, 0.4, 0.8, 0.9) }
-
+fn default_outer_even() -> ColorRGBA {
+    (0.1, 0.1, 0.1, 0.8)
+}
+fn default_outer_odd() -> ColorRGBA {
+    (0.15, 0.15, 0.15, 0.8)
+}
+fn default_outer_hover() -> ColorRGBA {
+    (0.2, 0.4, 0.8, 0.9)
+}
 
 fn default_menu_items() -> Vec<MenuItemConfig> {
     vec![
@@ -143,6 +202,14 @@ fn default_menu_items() -> Vec<MenuItemConfig> {
             label: "Files".to_string(),
             icon: "system-file-manager".to_string(),
             action: "thunar".to_string(),
+            children: vec![],
+            item_type: None,
+        },
+        // Example of a custom shell command action
+        MenuItemConfig {
+            label: "Script".to_string(),
+            icon: "utilities-terminal".to_string(),
+            action: "notify-send 'Hello' 'From Waypie'".to_string(),
             children: vec![],
             item_type: None,
         },
@@ -257,4 +324,3 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
         }
     }
 }
-

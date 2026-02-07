@@ -40,10 +40,13 @@ impl ObjectImpl for RadialMenu {
         let obj = self.obj();
 
         // Clock Timer
-        gtk4::glib::timeout_add_local(std::time::Duration::from_secs(1), glib::clone!(@weak obj => @default-return glib::ControlFlow::Break, move || {
-            obj.queue_draw();
-            glib::ControlFlow::Continue
-        }));
+        gtk4::glib::timeout_add_local(
+            std::time::Duration::from_secs(1),
+            glib::clone!(@weak obj => @default-return glib::ControlFlow::Break, move || {
+                obj.queue_draw();
+                glib::ControlFlow::Continue
+            }),
+        );
 
         // Motion Controller
         let motion = EventControllerMotion::new();
@@ -99,8 +102,7 @@ impl WidgetImpl for RadialMenu {
         let w = obj.width() as f64;
         let h = obj.height() as f64;
 
-        let cr =
-            snapshot.append_cairo(&gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32));
+        let cr = snapshot.append_cairo(&gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32));
 
         let center_x = w / 2.0;
         let center_y = h / 2.0;
@@ -111,7 +113,7 @@ impl WidgetImpl for RadialMenu {
 
         // --- Draw Center ---
         let center_radius = ui.center_radius;
-        
+
         // Background for center
         let (r, g, b, a) = ui.center_color;
         cr.set_source_rgba(r, g, b, a);
@@ -228,13 +230,7 @@ impl WidgetImpl for RadialMenu {
                             cr.set_source_rgba(r, g, b, a * alpha);
 
                             cr.new_path();
-                            cr.arc(
-                                center_x,
-                                center_y,
-                                outer_radius_end,
-                                start_angle,
-                                end_angle,
-                            );
+                            cr.arc(center_x, center_y, outer_radius_end, start_angle, end_angle);
                             cr.arc_negative(
                                 center_x,
                                 center_y,

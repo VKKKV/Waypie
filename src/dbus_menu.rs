@@ -1,10 +1,13 @@
 use dbusmenu_glib_sys as ffi;
-use gtk4::gdk::Rectangle;
 use gtk4::glib;
+use gtk4::glib::prelude::*;
 use gtk4::glib::translate::*;
-use gtk4::prelude::*;
-use gtk4::{Box, Button, Orientation, PolicyType, Popover, ScrolledWindow, Separator};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
 use zbus::Connection;
+
+use crate::hud::radial_menu::PieItem;
 
 // Wrappers for dbusmenu-glib
 glib::wrapper! {
@@ -65,6 +68,10 @@ glib::wrapper! {
 }
 
 impl Menuitem {
+    pub fn id(&self) -> i32 {
+        unsafe { ffi::dbusmenu_menuitem_get_id(self.as_ptr()) }
+    }
+
     pub fn children(&self) -> Vec<Menuitem> {
         unsafe {
             FromGlibPtrContainer::from_glib_none(ffi::dbusmenu_menuitem_get_children(self.as_ptr()))
@@ -108,24 +115,66 @@ impl Menuitem {
             );
         }
     }
+
+    pub fn convert_dbus_to_pie(root: &Menuitem, service: &str, path: &str) -> Vec<PieItem> {
+        let mut items = Vec::new();
+        for child in root.children() {
+            // Filter hidden items
+            if child.property_exist("visible") && !child.property_get_bool("visible") {
+                continue;
+            }
+
+            let type_str = child.property_get("type").unwrap_or_default().to_string();
+            if type_str == "separator" {
+                continue;
+            }
+
+            let label = child
+                .property_get("label")
+                .unwrap_or_default()
+                .to_string()
+                .replace("_", "");
+
+            let icon = child
+                .property_get("icon-name")
+                .unwrap_or_default()
+                .to_string();
+
+            let icon = if icon.is_empty() {
+                "view-more-symbolic".to_string()
+            } else {
+                icon
+            };
+
+            // Construct action string: "dbus_signal|service|path|ID"
+            let action = format!("dbus_signal|{}|{}|{}", service, path, child.id());
+
+            let children = Self::convert_dbus_to_pie(&child, service, path);
+
+            items.push(PieItem {
+                label,
+                icon,
+                action,
+                children,
+                item_type: Some("dbus_item".to_string()),
+                tray_id: None,
+            });
+        }
+        items
+    }
 }
 
 /// Tries to activate the item via SNI `Activate` method.
-/// If that fails (e.g. method not found), falls back to showing the DBusMenu popup.
-/// Returns `true` if activation succeeded, `false` if fallback was used.
+/// Returns `true` if activation succeeded.
 pub async fn activate_or_popup(
     service: String,
     item_path: String,
-    menu_path: String,
-    parent_widget: gtk4::Widget,
+    _menu_path: String,
+    _parent_widget: gtk4::Widget,
     x: f64,
     y: f64,
 ) -> bool {
-    let parent_weak = parent_widget.downgrade();
-    drop(parent_widget);
-
     let service_clone = service.clone();
-    let menu_path_clone = menu_path.clone();
 
     let service_for_task = service.clone();
     let item_path_for_task = item_path.clone();
@@ -170,233 +219,88 @@ pub async fn activate_or_popup(
         service_clone, activate_result
     );
 
-    if let Err(_) = activate_result {
-        if let Some(parent) = parent_weak.upgrade() {
-            glib::source::idle_add_local(move || {
-                show_menu(
-                    service_clone.clone(),
-                    menu_path_clone.clone(),
-                    &parent,
-                    x,
-                    y,
-                );
-                glib::ControlFlow::Break
-            });
-        }
-        return false;
-    } else {
-        println!(
-            "Waypie: Activate OK for {}. HUD should close if app handled it.",
-            service_clone
-        );
-    }
-
-    true
+    activate_result.is_ok()
 }
 
-pub fn show_menu(service: String, path: String, _parent_widget: &gtk4::Widget, _x: f64, _y: f64) {
-    if path.is_empty() {
-        return;
-    }
+pub async fn fetch_dbus_menu_as_pie(service: String, path: String) -> Result<Vec<PieItem>, String> {
+    // 1. Call AboutToShow to trigger dynamic update
+    // We do this async on Tokio before creating the client on Main Thread
+    let service_clone = service.clone();
+    let path_clone = path.clone();
 
-    println!("Waypie: Opening Debug Window for {} at {}...", service, path);
-
-    let client = match Client::new(&service, &path) {
-        Some(c) => c,
-        None => {
-            eprintln!(
-                "Waypie: Failed to create DBusMenu Client for {} at {}",
-                service, path
-            );
-            return;
-        }
-    };
-
-    // Create a standalone Window instead of a Popover
-    let window = gtk4::Window::builder()
-        .title("WaypieDebugMenu")
-        .decorated(false)
-        .resizable(false)
-        .default_width(200)
-        .default_height(300)
-        .build();
-
-    // DEBUG: Visual CSS
-    let provider = gtk4::CssProvider::new();
-    provider.load_from_data("window { border: 5px solid red; }");
-    window
-        .style_context()
-        .add_provider(&provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-
-    let client_clone = client.clone();
-    // Keep client alive with window
-    window.connect_close_request(move |_| {
-        let _ = &client_clone;
-        glib::Propagation::Proceed
-    });
-
-    let window_weak = window.downgrade();
-
-    let update_ui = move |client: &Client| {
-        if let Some(window) = window_weak.upgrade() {
-            if let Some(root) = client.root() {
-                println!("Waypie: Client Root found! Building content...");
-                let content = build_menu_content(&window, &root);
-                window.set_child(Some(&content));
-            } else {
-                println!("Waypie: Waiting for root update...");
-            }
-        }
-    };
-
-    let update_ui_clone = update_ui.clone();
-    client.connect_layout_updated(move |client| {
-        update_ui_clone(client);
-    });
-
-    let update_ui_clone = update_ui.clone();
-    client.connect_root_changed(move |client, _new_root| {
-        update_ui_clone(client);
-    });
-
-    if let Some(root) = client.root() {
-        println!("Waypie: Initial Root found!");
-        let content = build_menu_content(&window, &root);
-        window.set_child(Some(&content));
-    } else {
-        println!("Waypie: No initial root, showing spinner.");
-        let loading_box = Box::new(Orientation::Vertical, 10);
-        loading_box.set_margin_top(10);
-        loading_box.set_margin_bottom(10);
-        loading_box.set_margin_start(10);
-        loading_box.set_margin_end(10);
-        
-        let close_btn = Button::with_label("Close");
-        let win_clone = window.clone();
-        close_btn.connect_clicked(move |_| win_clone.close());
-        loading_box.append(&close_btn);
-
-        let spinner = gtk4::Spinner::new();
-        spinner.start();
-        loading_box.append(&spinner);
-        let label = gtk4::Label::new(Some("Loading menu..."));
-        loading_box.append(&label);
-        window.set_child(Some(&loading_box));
-    }
-
-    window.present();
-}
-
-fn build_menu_content(window: &gtk4::Window, root: &Menuitem) -> gtk4::Widget {
-    let children = root.children();
-    println!("Waypie: Root has {} children", children.len());
-
-    let scrolled = ScrolledWindow::builder()
-        .hscrollbar_policy(PolicyType::Never)
-        .vscrollbar_policy(PolicyType::Automatic)
-        .propagate_natural_width(true)
-        .build();
-
-    let root_box = Box::new(Orientation::Vertical, 0);
-
-    let close_btn = Button::with_label("Close Menu");
-    let win_clone = window.clone();
-    close_btn.connect_clicked(move |_| win_clone.close());
-    root_box.append(&close_btn);
-    root_box.append(&Separator::new(Orientation::Horizontal));
-
-    for child in children {
-        if let Some(widget) = build_menu_item(&child, 0, window) {
-            root_box.append(&widget);
-        }
-    }
-
-    scrolled.set_child(Some(&root_box));
-    scrolled.into()
-}
-
-fn build_menu_item(item: &Menuitem, depth: i32, window: &gtk4::Window) -> Option<gtk4::Widget> {
-    let label = item
-        .property_get("label")
-        .unwrap_or_default()
-        .to_string()
-        .replace("_", "");
-
-    let visible = if item.property_exist("visible") {
-        item.property_get_bool("visible")
-    } else {
-        true
-    };
-
-    let type_str = item.property_get("type").unwrap_or_default();
-
-    println!(
-        "Waypie: Building Item | Label: '{}' | Type: '{}' | Visible: {}",
-        label, type_str, visible
-    );
-
-    let enabled = if item.property_exist("enabled") {
-        item.property_get_bool("enabled")
-    } else {
-        true
-    };
-
-    let is_separator = type_str == "separator";
-
-    if !visible {
-        return None;
-    }
-
-    if is_separator {
-        return Some(Separator::new(Orientation::Horizontal).into());
-    }
-
-    let container = Box::new(Orientation::Vertical, 0);
-    container.set_margin_start(depth * 10);
-
-    let mut widget_added = false;
-
-    if !label.is_empty() {
-        let button = Button::builder()
-            .label(&label)
-            .has_frame(false)
-            .halign(gtk4::Align::Fill)
-            .build();
-
-        if let Some(child) = button.child() {
-            if let Some(label_widget) = child.downcast_ref::<gtk4::Label>() {
-                label_widget.set_xalign(0.0);
-            }
-        }
-
-        button.set_sensitive(enabled);
-
-        let item_clone = item.clone();
-        let window_weak = window.downgrade();
-
-        button.connect_clicked(move |_| {
-            item_clone.handle_event("clicked", &glib::Variant::from(""), 0);
-            if let Some(win) = window_weak.upgrade() {
-                win.close();
+    // Spawn AboutToShow on Tokio
+    let _ = crate::RUNTIME
+        .get()
+        .expect("Runtime not initialized")
+        .spawn(async move {
+            if let Ok(conn) = Connection::session().await {
+                let _ = conn
+                    .call_method(
+                        Some(service_clone.as_str()),
+                        path_clone.as_str(),
+                        Some("com.canonical.dbusmenu"),
+                        "AboutToShow",
+                        &(0i32),
+                    )
+                    .await;
             }
         });
 
-        container.append(&button);
-        widget_added = true;
-    }
+    let client = Client::new(&service, &path)
+        .ok_or_else(|| format!("Failed to create DBusMenu Client for {}", service))?;
 
-    let children = item.children();
-    for child in children {
-        if let Some(child_widget) = build_menu_item(&child, depth + 1, window) {
-            container.append(&child_widget);
-            widget_added = true;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let tx_rc = Rc::new(RefCell::new(Some(tx)));
+    let debounce_timer = Rc::new(RefCell::new(None::<glib::SourceId>));
+
+    let tx_clone = tx_rc.clone();
+    let debounce_clone = debounce_timer.clone();
+    let s_clone = service.clone();
+    let p_clone = path.clone();
+
+    // Shared handler for signals
+    let handle_update = move |client: &Client| {
+        // Cancel existing timer
+        if let Some(id) = debounce_clone.borrow_mut().take() {
+            id.remove();
         }
+
+        let tx_inner = tx_clone.clone();
+        let s_inner = s_clone.clone();
+        let p_inner = p_clone.clone();
+        let client_weak = client.downgrade(); // Use weak ref if Client supports it, but Client is wrapper.
+                                              // Client wrapper is cheap to clone but we need to keep it alive?
+                                              // Actually, the closure captures 'client' reference.
+                                              // We need to clone client to pass into timeout.
+        let client_owned = client.clone();
+
+        let id = glib::source::timeout_add_local(Duration::from_millis(75), move || {
+            if let Some(root) = client_owned.root() {
+                if let Some(tx) = tx_inner.borrow_mut().take() {
+                    let _ = tx.send(Ok(Menuitem::convert_dbus_to_pie(&root, &s_inner, &p_inner)));
+                }
+            }
+            glib::ControlFlow::Break
+        });
+
+        *debounce_clone.borrow_mut() = Some(id);
+    };
+
+    let handler = Rc::new(handle_update);
+
+    let h1 = handler.clone();
+    client.connect_layout_updated(move |c| h1(c));
+
+    let h2 = handler.clone();
+    client.connect_root_changed(move |c, _| h2(c));
+
+    // Initial check (also debounced to allow AboutToShow to have effect)
+    if client.root().is_some() {
+        handler(&client);
     }
 
-    if widget_added {
-        Some(container.into())
-    } else {
-        None
+    match rx.await {
+        Ok(res) => res,
+        Err(_) => Err("DBusMenu client dropped or signals disconnected".to_string()),
     }
 }
-

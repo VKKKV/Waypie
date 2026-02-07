@@ -1,46 +1,79 @@
-icon = "archlinux-logo"
-
-# Radial Slices (Clockwise starting from 12 o'clock)
-[[items]]
-label = "Terminal"
-script = "ghostty"
-
-[[items]]
-label = "Browser"
-script = "firefox"
-
-[[items]]
-label = "Files"
-script = "thunar"
-
-[[items]]
-label = "Power"
-script = "wlogout"
-
 [ui]
-refresh_rate_ms = 200
-width = 600
-height = 600
-outer_radius = 180.0
-tray_inner_radius = 110.0
-vol_radius = 95.0
-font_family = "Sans"
-hover_mode = "highlight"
+width = 800
+height = 800
+center_radius = 100.0
+inner_radius = 200.0
+outer_radius = 400.0
 
+# Colors (RGBA or RGB)
+# Format: [r, g, b, a] or [r, g, b] where values are 0.0 to 1.0
 [ui.colors]
-# Hex colors: #RRGGBB or #RRGGBBAA (8-bit per channel)
-background = "#1A1A1AE6"        # Dark grey with 90% alpha
-volume_track = "#4D4D4D80"      # Grey with 50% alpha
-volume_arc = "#0E91D2"          # Arch Blue
-volume_warning = "#CC3333"      # Red for high volume
-text = "#FFFFFF"                # White
-tray_even = "#262626E6"         # Dark even rows
-tray_odd = "#333333E6"          # Dark odd rows
-hover_overlay = "#FFFFFF19"     # White 10% opacity
+center_color = [0.0, 0.0, 0.0, 0.5]
+text_color = [1.0, 1.0, 1.0]
+stroke_color = [0.0, 0.0, 0.0]
 
-[actions]
-# Commands for interactions with the Central Hub
-left_click = "pwvucontrol"      # Default: open volume control
-right_click = ""                # Empty = disabled
-scroll_up = "pamixer -i 5"      # Volume up
-scroll_down = "pamixer -d 5"    # Volume down
+# Ring Colors
+inner_ring_color_even = [0.1, 0.1, 0.1, 0.8]
+inner_ring_color_odd = [0.15, 0.15, 0.15, 0.8]
+inner_ring_color_hover = [0.2, 0.2, 0.2, 0.9]
+inner_ring_color_active = [0.3, 0.3, 0.3, 0.9]
+
+outer_ring_color_even = [0.1, 0.1, 0.1, 0.8]
+outer_ring_color_odd = [0.15, 0.15, 0.15, 0.8]
+outer_ring_color_hover = [0.2, 0.4, 0.8, 0.9]
+
+[[menu]]
+label = "Web"
+icon = "web-browser"
+action = ""
+
+[[menu.children]]
+label = "Firefox"
+icon = "firefox"
+action = "firefox"
+children = []
+
+[[menu.children]]
+label = "zen-browser"
+icon = "zen-browser"
+action = "zen-browser"
+children = []
+
+[[menu]]
+label = "Terminal"
+icon = "utilities-terminal"
+action = "ghostty"
+children = []
+
+[[menu]]
+label = "Files"
+icon = "system-file-manager"
+action = "thunar"
+children = []
+
+# Custom Shell Script / Command Execution
+# The 'action' field supports executing any shell command or script.
+# - You can provide a full path to a script file (e.g., "/path/to/script.sh argument")
+# - You can write inline shell commands (e.g., "notify-send 'Title' 'Message'")
+# - Commands are executed in a detached process.
+
+# Example: Executing a script with arguments
+[[menu]]
+label = "ScreenShot"
+icon = "camera-photo"
+action = "/home/kita/.config/hypr/lib/screenshot.sh s"
+children = []
+
+# Example: Inline shell command
+[[menu]]
+label = "Say Hi"
+icon = "user-info"
+action = "notify-send 'Waypie' 'Hello from the radial menu!'"
+children = []
+
+[[menu]]
+label = "Tray"
+icon = "emblem-system"
+action = ""
+children = []
+type = "tray"

@@ -1,108 +1,54 @@
 # Waypie
 
-## Features
 
-*   **Interactive Radial Wheel:** Central hub for time, date, and volume, surrounded by a customizable ring of application launchers.
-*   **Hover Effects:** Visual feedback when hovering over the center hub or ring segments (highlight).
-*   **Highly Configurable:** Customize colors, sizes, radii, polling rates, and mouse actions.
-*   **System Tray Integration:** Optional background daemon for tray icon support.
-*   **Universal Wayland Support:** Works on Hyprland, Niri, GNOME, KDE, Sway, and any Wayland compositor.
-*   **Smart Cursor Positioning:** Opens wheel at cursor on Hyprland; gracefully centers on other compositors.
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Built with Rust](https://img.shields.io/badge/Built%20with-Rust-orange)](https://www.rust-lang.org)
+[![Wayland](https://img.shields.io/badge/Protocol-Wayland-green)](https://wayland.freedesktop.org/)
+[![Arch Linux](https://img.shields.io/badge/Arch-btw-1793d1)](https://archlinux.org)
 
-## Installation
+> A high-performance, highly customizable radial menu and HUD for Wayland<br>
 
-### 1. Build from Source
+![Waypie Demo](img/demo.png)
+
+> **Status: Experimental Prototype / Demo**<br>
+> This project is currently in a **proof-of-concept** stage. While functional, it contains experimental code and incomplete features (especially regarding system tray integration).
+
+#### Current features
+- Cursor Auto Centering
+- Basic System Tray (SNI) Host [Experimental]
+- Interactive 2-Level Radial Menu (Categories & Sub-actions)
+- Custom Shell Script & Command Execution
+- Wayland Native (Layer Shell)
+- Real-time Clock
+- Hot-Reloading Configuration
+
+#### Configuration and Styling
+
+Waypie is configurable via `TOML`
+
+[See the example configuration](https://github.com/vkkkv/waypie/tree/main/examples/config.toml)
+
+### Installation
+
+#### Building from source
 
 ```bash
+git clone https://github.com/vkkkv/waypie
+cd waypie
 cargo build --release
+./target/release/waypie
 ```
 
-The binary will be located at `target/release/waypie`.
+**Dependencies**
 
-### 2. Configuration
-
-Create a config file at `~/.config/waypie/config.toml`.
-
-#### Basic Configuration
-
-```toml
-icon = "archlinux-logo"
-
-# Radial Slices (Clockwise starting from 12 o'clock)
-[[items]]
-label = "Terminal"
-script = "ghostty"
-
-[[items]]
-label = "Web"
-script = "firefox"
-
-[[items]]
-label = "Files"
-script = "thunar"
-
-[[items]]
-label = "Power"
-script = "wlogout"
+```
+gtk4
+gtk4-layer-shell
+wayland
+wayland-protocols
+libdbusmenu-glib
 ```
 
-#### Advanced UI Customization (Optional)
+## License
 
-```toml
-[ui]
-refresh_rate_ms = 200
-width = 400
-height = 400
-outer_radius = 180.0
-tray_inner_radius = 110.0
-vol_radius = 95.0
-font_family = "Sans"
-hover_mode = "highlight"
-
-[ui.colors]
-# Format: [R, G, B] or [R, G, B, A] (0.0 to 1.0)
-background = [0.1, 0.1, 0.1, 0.9]
-volume_track = [0.3, 0.3, 0.3, 0.5]
-volume_arc = [0.09, 0.57, 0.82]
-volume_warning = [0.8, 0.2, 0.2]
-text = [1.0, 1.0, 1.0]
-tray_even = [0.15, 0.15, 0.15, 0.9]
-tray_odd = [0.2, 0.2, 0.2, 0.9]
-hover_overlay = [1.0, 1.0, 1.0, 0.1]
-
-[actions]
-# Commands for interactions with the Central Hub
-# Defaults:
-left_click = "pwvucontrol"
-right_click = (none)
-scroll_up = "pamixer -i 5"
-scroll_down = "pamixer -d 5"
-
-# Example: Mute on click, Open mixer on right click
-left_click = "pamixer -t"
-right_click = "pwvucontrol"
-```
-
-## Usage
-
-### Radial Wheel (Default)
-
-Launch the interactive radial menu:
-
-```bash
-waypie
-```
-
-*   **Center:** Displays Time, Date, and Volume.
-*   **Inner Ring:** Visual Volume Arc (Blue normally, Red if > 80%).
-*   **Outer Ring:** Clickable segments to launch configured applications.
-*   **Exit:** Press `ESC` to close the wheel.
-
-### Background Service
-
-Run the system tray service in the background:
-
-```bash
-waypie daemon
-```
-
+Licensed under GPLv3

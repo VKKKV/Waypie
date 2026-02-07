@@ -67,4 +67,3 @@ where
     let s = <&str>::deserialize(deserializer)?;
     hex_to_color(s).map_err(serde::de::Error::custom)
 }
-
