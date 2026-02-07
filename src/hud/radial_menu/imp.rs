@@ -113,14 +113,16 @@ impl WidgetImpl for RadialMenu {
         let center_radius = ui.center_radius;
         
         // Background for center
-        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
+        let (r, g, b, a) = ui.center_color;
+        cr.set_source_rgba(r, g, b, a);
         cr.arc(center_x, center_y, center_radius, 0.0, 2.0 * PI);
         cr.fill().unwrap();
 
         // Time
         let now = chrono::Local::now();
         let time_str = now.format("%H:%M").to_string();
-        cr.set_source_rgb(1.0, 1.0, 1.0);
+        let (tr, tg, tb) = ui.text_color;
+        cr.set_source_rgb(tr, tg, tb);
         cr.set_font_size(20.0);
         let ext = cr.text_extents(&time_str).unwrap();
         cr.move_to(center_x - ext.width() / 2.0, center_y + ext.height() / 4.0);
@@ -141,15 +143,16 @@ impl WidgetImpl for RadialMenu {
             let end_angle = start_angle + angle_per_parent;
 
             // Determine Color
-            if Some(i) == self.hover_parent_idx.get() {
-                cr.set_source_rgba(0.2, 0.2, 0.2, 0.9); // Hover
+            let (r, g, b, a) = if Some(i) == self.hover_parent_idx.get() {
+                ui.inner_ring_color_hover
             } else if Some(i) == self.active_parent_idx.get() {
-                cr.set_source_rgba(0.3, 0.3, 0.3, 0.9); // Active
+                ui.inner_ring_color_active
             } else if i % 2 == 0 {
-                cr.set_source_rgba(0.1, 0.1, 0.1, 0.8); // Normal Even
+                ui.inner_ring_color_even
             } else {
-                cr.set_source_rgba(0.15, 0.15, 0.15, 0.8); // Normal Odd
-            }
+                ui.inner_ring_color_odd
+            };
+            cr.set_source_rgba(r, g, b, a);
 
             // Draw Segment
             cr.new_path();
@@ -165,12 +168,13 @@ impl WidgetImpl for RadialMenu {
             cr.fill().unwrap();
 
             // Stroke
-            cr.set_source_rgb(0.0, 0.0, 0.0);
+            let (sr, sg, sb) = ui.stroke_color;
+            cr.set_source_rgb(sr, sg, sb);
             cr.set_line_width(1.0);
             cr.stroke().unwrap();
 
             // Text
-            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.set_source_rgb(tr, tg, tb);
             cr.set_font_size(12.0);
             let text_radius = (inner_radius_start + inner_radius_end) / 2.0;
             let mid_angle = start_angle + angle_per_parent / 2.0;
@@ -214,14 +218,14 @@ impl WidgetImpl for RadialMenu {
                             let end_angle = start_angle + angle_per_child;
 
                             // Color
-                            if Some(j) == self.hover_child_idx.get() {
-                                cr.set_source_rgba(0.2, 0.4, 0.8, 0.9 * alpha);
-                            // Hover Child (Blue)
+                            let (r, g, b, a) = if Some(j) == self.hover_child_idx.get() {
+                                ui.outer_ring_color_hover
                             } else if j % 2 == 0 {
-                                cr.set_source_rgba(0.1, 0.1, 0.1, 0.8 * alpha);
+                                ui.outer_ring_color_even
                             } else {
-                                cr.set_source_rgba(0.15, 0.15, 0.15, 0.8 * alpha);
-                            }
+                                ui.outer_ring_color_odd
+                            };
+                            cr.set_source_rgba(r, g, b, a * alpha);
 
                             cr.new_path();
                             cr.arc(
@@ -242,12 +246,14 @@ impl WidgetImpl for RadialMenu {
                             cr.fill().unwrap();
 
                             // Stroke
-                            cr.set_source_rgba(0.0, 0.0, 0.0, alpha);
+                            let (sr, sg, sb) = ui.stroke_color;
+                            cr.set_source_rgba(sr, sg, sb, alpha);
                             cr.set_line_width(1.0);
                             cr.stroke().unwrap();
 
                             // Text
-                            cr.set_source_rgba(1.0, 1.0, 1.0, alpha);
+                            let (tr, tg, tb) = ui.text_color;
+                            cr.set_source_rgba(tr, tg, tb, alpha);
                             cr.set_font_size(11.0);
                             let text_radius = (outer_radius_start + outer_radius_end) / 2.0;
                             let mid_angle = start_angle + angle_per_child / 2.0;

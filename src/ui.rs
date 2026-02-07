@@ -2,7 +2,6 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 use std::sync::{Arc, RwLock};
-use tokio::runtime::Runtime;
 
 use crate::config::{self, MenuItemConfig};
 use crate::hud::radial_menu::{PieItem, RadialMenu};
@@ -20,15 +19,15 @@ pub fn build_ui(app: &Application) {
     let sni = SNIWatcher::new(Some(sender.clone()));
     let tray_items = sni.items();
 
-    std::thread::spawn(move || {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            tokio::join!(
-                config::watch_config(config_store_clone, sender),
-                async { let _ = sni.start().await; }
-            );
+    // Spawn on global runtime
+    crate::RUNTIME
+        .get()
+        .expect("Runtime not initialized")
+        .spawn(async move {
+            tokio::join!(config::watch_config(config_store_clone, sender), async {
+                let _ = sni.start().await;
+            });
         });
-    });
 
     // 3. Setup Main Window
     let window = ApplicationWindow::builder()
@@ -123,61 +122,64 @@ pub fn build_ui(app: &Application) {
 }
 
 fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> Vec<PieItem> {
-    items.iter().map(|item| {
-        if item.item_type.as_deref() == Some("tray") {
-            let mut tray_children = Vec::new();
-            
-            if tray_items.is_empty() {
-                tray_children.push(PieItem {
-                    label: "Empty".to_string(),
-                    icon: "emblem-important".to_string(),
-                    action: "".to_string(),
-                    children: vec![],
-                    item_type: None,
-                    tray_id: None,
-                });
-            } else {
-                for tray in tray_items {
-                    let activate_action = format!("activate|{}|{}", tray.service, tray.path);
-                    let context_action = format!("context|{}|{}|{}", tray.service, tray.path, tray.menu_path);
-                    
+    items
+        .iter()
+        .map(|item| {
+            if item.item_type.as_deref() == Some("tray") {
+                let mut tray_children = Vec::new();
+
+                if tray_items.is_empty() {
                     tray_children.push(PieItem {
-                        label: tray.title.clone(),
-                        icon: tray.icon_name.clone(),
-                        action: activate_action,
-                        children: vec![
-                            PieItem {
+                        label: "Empty".to_string(),
+                        icon: "emblem-important".to_string(),
+                        action: "".to_string(),
+                        children: vec![],
+                        item_type: None,
+                        tray_id: None,
+                    });
+                } else {
+                    for tray in tray_items {
+                        let activate_action =
+                            format!("activate|{}|{}|{}", tray.service, tray.path, tray.menu_path);
+                        let context_action =
+                            format!("context|{}|{}|{}", tray.service, tray.path, tray.menu_path);
+
+                        tray_children.push(PieItem {
+                            label: tray.title.clone(),
+                            icon: tray.icon_name.clone(),
+                            action: activate_action,
+                            children: vec![PieItem {
                                 label: "Context Menu".to_string(),
                                 icon: "view-more-symbolic".to_string(),
                                 action: context_action,
                                 children: vec![],
                                 item_type: Some("tray_context".to_string()),
                                 tray_id: None,
-                            }
-                        ],
-                        item_type: Some("tray_app".to_string()),
-                        tray_id: Some(format!("{}|{}", tray.service, tray.path)),
-                    });
+                            }],
+                            item_type: Some("tray_app".to_string()),
+                            tray_id: Some(format!("{}|{}", tray.service, tray.path)),
+                        });
+                    }
+                }
+
+                PieItem {
+                    label: item.label.clone(),
+                    icon: item.icon.clone(),
+                    action: item.action.clone(),
+                    children: tray_children,
+                    item_type: item.item_type.clone(),
+                    tray_id: None,
+                }
+            } else {
+                PieItem {
+                    label: item.label.clone(),
+                    icon: item.icon.clone(),
+                    action: item.action.clone(),
+                    children: convert_menu_items(&item.children, tray_items),
+                    item_type: item.item_type.clone(),
+                    tray_id: None,
                 }
             }
-
-            PieItem {
-                label: item.label.clone(),
-                icon: item.icon.clone(),
-                action: item.action.clone(),
-                children: tray_children,
-                item_type: item.item_type.clone(),
-                tray_id: None,
-            }
-        } else {
-            PieItem {
-                label: item.label.clone(),
-                icon: item.icon.clone(),
-                action: item.action.clone(),
-                children: convert_menu_items(&item.children, tray_items),
-                item_type: item.item_type.clone(),
-                tray_id: None,
-            }
-        }
-    }).collect()
+        })
+        .collect()
 }

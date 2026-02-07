@@ -19,6 +19,13 @@ waypie/
     │   └── radial_menu/  # Main Radial Menu Widget (GObject Subclassing)
     │       ├── mod.rs    # Public API, hit-detection, and click handling
     │       └── imp.rs    # Private implementation and Cairo drawing logic
+    ├── notifier_host/    # SystemNotifierHost implementation (SNI Watcher)
+    │   ├── Cargo.toml
+    │   └── src/
+    │       ├── lib.rs
+    │       ├── host.rs
+    │       ├── watcher.rs
+    │       └── ...
     ├── dbus_menu.rs      # Manual DBusMenu client (com.canonical.dbusmenu)
     ├── config.rs         # Configuration Management (TOML) & Hot-Reloading (notify)
     ├── utils.rs          # Async command execution & shell parsing (shlex)

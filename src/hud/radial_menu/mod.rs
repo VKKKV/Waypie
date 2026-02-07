@@ -248,28 +248,40 @@ impl RadialMenu {
                 let action_clone = action.clone();
 
                 if action_clone.starts_with("activate|") {
-                    crate::RUNTIME
-                        .get()
-                        .expect("Runtime not initialized")
-                        .spawn(async move {
-                            let parts: Vec<&str> = action_clone.splitn(3, '|').collect();
-                            if parts.len() == 3 {
-                                let service = parts[1].to_string();
-                                let path = parts[2].to_string();
-                                if let Err(e) =
-                                    crate::sni_watcher::activate_item(&service, &path, 0, 0).await
-                                {
-                                    eprintln!("Waypie: Failed to activate item: {}", e);
-                                }
+                    let self_clone = self.clone();
+                    gtk4::glib::spawn_future_local(async move {
+                        let parts: Vec<&str> = action_clone.splitn(4, '|').collect();
+                        if parts.len() == 4 {
+                            let service = parts[1].to_string();
+                            let path = parts[2].to_string();
+                            let menu_path = parts[3].to_string();
+                            
+                            // Try Activate, Fallback to Popup
+                            let success = crate::dbus_menu::activate_or_popup(
+                                service, 
+                                path, 
+                                menu_path, 
+                                self_clone.upcast_ref::<gtk4::Widget>().clone(), 
+                                x, 
+                                y
+                            ).await;
+
+                            if success {
+                                std::process::exit(0);
                             }
-                            std::process::exit(0);
-                        });
+                        } else {
+                            // Fallback for old/broken config or tray items?
+                            // Or just log error.
+                            eprintln!("Waypie: Invalid activate action format: {}", action_clone);
+                            std::process::exit(0); 
+                        }
+                    });
                 } else if action_clone.starts_with("context|") {
                     let parts: Vec<&str> = action_clone.splitn(4, '|').collect();
                     if parts.len() >= 4 {
                         let service = parts[1].to_string();
                         let menu_path = parts[3].to_string();
-                        crate::dbus_menu::popup(service, menu_path, self.upcast_ref::<gtk4::Widget>(), x, y);
+                        crate::dbus_menu::show_menu(service, menu_path, self.upcast_ref::<gtk4::Widget>(), x, y);
                     }
                 } else {
                     if let Err(e) = crate::utils::spawn_app(&action_clone) {
