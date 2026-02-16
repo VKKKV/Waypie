@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::f64::consts::PI;
 use std::time::Instant;
 
-use super::PieItem;
+use super::radial::PieItem;
 
 #[derive(Default)]
 pub struct RadialMenu {
@@ -28,7 +28,7 @@ pub struct RadialMenu {
 #[glib::object_subclass]
 impl ObjectSubclass for RadialMenu {
     const NAME: &'static str = "RadialMenu";
-    type Type = super::RadialMenu;
+    type Type = super::radial::RadialMenu;
     type ParentType = gtk4::Widget;
 }
 

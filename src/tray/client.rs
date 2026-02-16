@@ -1,7 +1,7 @@
 use system_tray::menu::{MenuItem, MenuType, TrayMenu};
 use zbus::Connection;
 
-use crate::hud::radial_menu::PieItem;
+use crate::ui::radial::PieItem;
 
 /// Tries to activate the item via SNI `Activate` method.
 /// Returns `true` if activation succeeded.

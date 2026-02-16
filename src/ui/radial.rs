@@ -15,10 +15,10 @@ pub struct PieItem {
     pub tray_id: Option<String>,
 }
 
-mod imp;
+use super::radial_imp;
 
 glib::wrapper! {
-    pub struct RadialMenu(ObjectSubclass<imp::RadialMenu>)
+    pub struct RadialMenu(ObjectSubclass<radial_imp::RadialMenu>)
         @extends gtk4::Widget;
 }
 
@@ -46,14 +46,14 @@ impl RadialMenu {
         0
     }
 
-    fn handle_motion(&self, x: f64, y: f64) {
+    pub fn handle_motion(&self, x: f64, y: f64) {
         let imp = self.imp();
         let w = self.width() as f64;
         let h = self.height() as f64;
         let cx = w / 2.0;
         let cy = h / 2.0;
 
-        let (dist, angle_deg) = self.cartesian_to_polar(x, y, cx, cy);
+        let (dist, angle_deg) = crate::utils::cartesian_to_polar(x, y, cx, cy);
         let items = imp.items.borrow();
         let parent_count = items.len();
 
@@ -149,7 +149,7 @@ impl RadialMenu {
         }
     }
 
-    fn handle_leave(&self) {
+    pub fn handle_leave(&self) {
         let imp = self.imp();
         imp.hover_parent_idx.set(None);
         imp.hover_child_idx.set(None);
@@ -162,7 +162,7 @@ impl RadialMenu {
         self.queue_draw();
     }
 
-    fn check_hover_timer(&self) {
+    pub fn check_hover_timer(&self) {
         let imp = self.imp();
 
         if let Some(hover_idx) = imp.hover_parent_idx.get() {
@@ -189,14 +189,14 @@ impl RadialMenu {
         }
     }
 
-    fn handle_click(&self, gesture: &GestureClick, _n_press: i32, x: f64, y: f64) {
+    pub fn handle_click(&self, gesture: &GestureClick, _n_press: i32, x: f64, y: f64) {
         let imp = self.imp();
         let w = self.width() as f64;
         let h = self.height() as f64;
         let cx = w / 2.0;
         let cy = h / 2.0;
 
-        let (dist, _angle_deg) = self.cartesian_to_polar(x, y, cx, cy);
+        let (dist, _angle_deg) = crate::utils::cartesian_to_polar(x, y, cx, cy);
         let items = imp.items.borrow();
         let button = gesture.current_button();
 
@@ -251,7 +251,7 @@ impl RadialMenu {
                             let menu_path = parts[3].to_string();
 
                             // Try Activate, Fallback to Popup
-                            let success = crate::dbus_menu::activate_or_popup(
+                            let success = crate::tray::activate_or_popup(
                                 service,
                                 path,
                                 menu_path,
@@ -279,9 +279,10 @@ impl RadialMenu {
                         let self_clone = self.clone();
 
                         gtk4::glib::spawn_future_local(async move {
-                            match crate::dbus_menu::fetch_dbus_menu_as_pie(service, menu_path).await
+                            match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await
                             {
                                 Ok(items) => {
+                                    let items: Vec<PieItem> = items;
                                     println!(
                                         "Waypie: Context menu fetched with {} items",
                                         items.len()
@@ -343,14 +344,5 @@ impl RadialMenu {
                 }
             }
         }
-    }
-
-    fn cartesian_to_polar(&self, x: f64, y: f64, cx: f64, cy: f64) -> (f64, f64) {
-        let dx = x - cx;
-        let dy = y - cy;
-        let dist = (dx * dx + dy * dy).sqrt();
-        let theta_rad = dy.atan2(dx);
-        let theta_deg = theta_rad.to_degrees();
-        (dist, theta_deg)
     }
 }

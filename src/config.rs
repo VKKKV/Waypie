@@ -1,5 +1,4 @@
 use crate::color::{self, ColorRGB, ColorRGBA};
-use directories::ProjectDirs;
 use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -238,7 +237,7 @@ pub struct MenuItemConfig {
 
 // 2. Loading Logic
 pub fn load_config() -> Config {
-    let path = get_config_path();
+    let path = crate::utils::get_config_path();
     if let Some(p) = &path {
         if p.exists() {
             match fs::read_to_string(p) {
@@ -268,13 +267,9 @@ pub fn load_config() -> Config {
     Config::default()
 }
 
-fn get_config_path() -> Option<PathBuf> {
-    ProjectDirs::from("org", "waypie", "waypie").map(|proj| proj.config_dir().join("config.toml"))
-}
-
 // 3. Watcher Setup
 pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_channel::Sender<()>) {
-    let path = get_config_path().unwrap_or_else(|| PathBuf::from("config.toml"));
+    let path = crate::utils::get_config_path().unwrap_or_else(|| PathBuf::from("config.toml"));
     let (tx, mut rx) = mpsc::channel(1);
 
     // Create a watcher that sends events to the channel

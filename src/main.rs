@@ -6,16 +6,14 @@ use tokio::runtime::Runtime;
 mod color;
 mod config;
 mod cursor;
-mod dbus_menu;
-mod hud;
-mod sni_watcher;
+mod tray;
 mod ui;
 mod utils;
 
 const APP_ID: &str = "com.arch.waypie";
 
 pub static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-pub static APP_STATE: OnceLock<Arc<sni_watcher::AppState>> = OnceLock::new();
+pub static APP_STATE: OnceLock<Arc<tray::AppState>> = OnceLock::new();
 
 fn main() {
     RUNTIME
