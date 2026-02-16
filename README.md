@@ -3,7 +3,6 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust-orange)](https://www.rust-lang.org)
 [![Wayland](https://img.shields.io/badge/Protocol-Wayland-green)](https://wayland.freedesktop.org/)
-[![Arch Linux](https://img.shields.io/badge/Arch-btw-1793d1)](https://archlinux.org)
 
 **Waypie** is a high-performance, Rust-based desktop HUD and utility **for Arch Linux on Wayland** (Sway/Hyprland). It provides an interactive 2-level radial menu with smooth animations and deep system integration.
 
@@ -106,7 +105,3 @@ Ensure you have the following installed:
 - `gtk4-layer-shell`
 - `wayland`
 - `wayland-protocols`
-
-### License
-
-Licensed under GPLv3
