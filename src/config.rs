@@ -130,53 +130,53 @@ impl Default for ColorsConfig {
 }
 
 fn default_width() -> i32 {
-    800
+    600
 }
 fn default_height() -> i32 {
-    800
+    600
 }
 fn default_center_radius() -> f64 {
-    100.0
+    40.0
 }
 fn default_inner_radius() -> f64 {
-    200.0
+    100.0
 }
 fn default_outer_radius() -> f64 {
-    400.0
+    200.0
 }
 
-// Default Colors
+// Default Colors (Hex Expression)
 fn default_center_color() -> ColorRGBA {
-    (0.0, 0.0, 0.0, 0.5)
+    color::hex_to_color("#00000080").unwrap()
 }
 fn default_text_color() -> ColorRGB {
-    (1.0, 1.0, 1.0)
+    color::hex_to_color("#ffffff").unwrap()
 }
 fn default_stroke_color() -> ColorRGB {
-    (0.0, 0.0, 0.0)
+    color::hex_to_color("#000000").unwrap()
 }
 
 fn default_inner_even() -> ColorRGBA {
-    (0.1, 0.1, 0.1, 0.8)
+    color::hex_to_color("#1a1a1acc").unwrap()
 }
 fn default_inner_odd() -> ColorRGBA {
-    (0.15, 0.15, 0.15, 0.8)
+    color::hex_to_color("#262626cc").unwrap()
 }
 fn default_inner_hover() -> ColorRGBA {
-    (0.2, 0.2, 0.2, 0.9)
+    color::hex_to_color("#333333e6").unwrap()
 }
 fn default_inner_active() -> ColorRGBA {
-    (0.3, 0.3, 0.3, 0.9)
+    color::hex_to_color("#4d4d4de6").unwrap()
 }
 
 fn default_outer_even() -> ColorRGBA {
-    (0.1, 0.1, 0.1, 0.8)
+    color::hex_to_color("#1a1a1acc").unwrap()
 }
 fn default_outer_odd() -> ColorRGBA {
-    (0.15, 0.15, 0.15, 0.8)
+    color::hex_to_color("#262626cc").unwrap()
 }
 fn default_outer_hover() -> ColorRGBA {
-    (0.2, 0.4, 0.8, 0.9)
+    color::hex_to_color("#3366ccff").unwrap()
 }
 
 fn default_menu_items() -> Vec<MenuItemConfig> {
@@ -217,7 +217,6 @@ fn default_menu_items() -> Vec<MenuItemConfig> {
             children: vec![],
             item_type: None,
         },
-        // Example of a custom shell command action
         MenuItemConfig {
             label: "Script".to_string(),
             icon: "utilities-terminal".to_string(),
@@ -227,7 +226,7 @@ fn default_menu_items() -> Vec<MenuItemConfig> {
         },
         MenuItemConfig {
             label: "Tray".to_string(),
-            icon: "emblem-system".to_string(), // Generic icon
+            icon: "emblem-system".to_string(),
             action: "".to_string(),
             children: vec![],
             item_type: Some("tray".to_string()),
@@ -285,7 +284,6 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
     let path = crate::utils::get_config_path().unwrap_or_else(|| PathBuf::from("config.toml"));
     let (tx, mut rx) = mpsc::channel(1);
 
-    // Create a watcher that sends events to the channel
     let mut watcher = RecommendedWatcher::new(
         move |res| {
             let _ = tx.blocking_send(res);
@@ -294,23 +292,19 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
     )
     .expect("Failed to create file watcher");
 
-    // Watch the directory (parent of config file) to handle editors that use atomic saves (rename/move)
     let watch_target = path.parent().unwrap_or(&path);
     if let Err(e) = watcher.watch(watch_target, RecursiveMode::NonRecursive) {
         eprintln!("Failed to watch config directory: {}", e);
         return;
     }
 
-    // Process events
     while let Some(res) = rx.recv().await {
         match res {
             Ok(event) => {
-                // Check if the specific config file was modified/created
                 let relevant = event.paths.iter().any(|p| p.ends_with("config.toml"));
 
                 if relevant {
                     println!("Config file changed. Reloading...");
-                    // Give fs a moment to settle (some editors write empty files first)
                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
                     match fs::read_to_string(&path) {

@@ -33,22 +33,21 @@ center_radius = 100.0
 inner_radius = 200.0
 outer_radius = 400.0
 
-# Colors (RGBA or RGB)
-# Values are 0.0 to 1.0
+# Colors (Hex expression: #RRGGBB or #RRGGBBAA)
 [ui.colors]
-center_color = [0.0, 0.0, 0.0, 0.5]
-text_color = [1.0, 1.0, 1.0]
-stroke_color = [0.0, 0.0, 0.0]
+center_color = "#00000080"
+text_color = "#ffffff"
+stroke_color = "#000000"
 
 # Ring Colors
-inner_ring_color_even = [0.1, 0.1, 0.1, 0.8]
-inner_ring_color_odd = [0.15, 0.15, 0.15, 0.8]
-inner_ring_color_hover = [0.2, 0.2, 0.2, 0.9]
-inner_ring_color_active = [0.3, 0.3, 0.3, 0.9]
+inner_ring_color_even = "#1a1a1acc"
+inner_ring_color_odd = "#262626cc"
+inner_ring_color_hover = "#333333e6"
+inner_ring_color_active = "#4d4d4de6"
 
-outer_ring_color_even = [0.1, 0.1, 0.1, 0.8]
-outer_ring_color_odd = [0.15, 0.15, 0.15, 0.8]
-outer_ring_color_hover = [0.2, 0.4, 0.8, 0.9]
+outer_ring_color_even = "#1a1a1acc"
+outer_ring_color_odd = "#262626cc"
+outer_ring_color_hover = "#3366ccff"
 
 [[menu]]
 label = "Web"
