@@ -37,7 +37,12 @@ pub struct UiConfig {
     #[serde(default = "default_outer_radius")]
     pub outer_radius: f64,
 
-    // Colors
+    #[serde(default)]
+    pub colors: ColorsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ColorsConfig {
     #[serde(
         default = "default_center_color",
         deserialize_with = "color::deserialize_color"
@@ -48,7 +53,7 @@ pub struct UiConfig {
         default = "default_text_color",
         deserialize_with = "color::deserialize_color"
     )]
-    pub text_color: ColorRGB, // Usually text is solid, but maybe RGBA? Let's stick to RGB for now or RGBA if imp.rs uses alpha for text fade. imp.rs uses set_source_rgb for text mostly, except outer ring which uses alpha multiplier. Let's use RGB for base text color. Wait, Outer ring text fades in. So maybe base color is RGB and we apply alpha in code.
+    pub text_color: ColorRGB,
 
     #[serde(
         default = "default_stroke_color",
@@ -102,6 +107,14 @@ impl Default for UiConfig {
             center_radius: default_center_radius(),
             inner_radius: default_inner_radius(),
             outer_radius: default_outer_radius(),
+            colors: ColorsConfig::default(),
+        }
+    }
+}
+
+impl Default for ColorsConfig {
+    fn default() -> Self {
+        Self {
             center_color: default_center_color(),
             text_color: default_text_color(),
             stroke_color: default_stroke_color(),
@@ -117,19 +130,19 @@ impl Default for UiConfig {
 }
 
 fn default_width() -> i32 {
-    600
+    800
 }
 fn default_height() -> i32 {
-    600
+    800
 }
 fn default_center_radius() -> f64 {
-    40.0
-}
-fn default_inner_radius() -> f64 {
     100.0
 }
-fn default_outer_radius() -> f64 {
+fn default_inner_radius() -> f64 {
     200.0
+}
+fn default_outer_radius() -> f64 {
+    400.0
 }
 
 // Default Colors

@@ -17,13 +17,13 @@ waypie/
     │   ├── radial.rs     # Radial Menu Widget (Public API)
     │   ├── radial_imp.rs # Radial Menu Private Implementation (Cairo drawing)
     │   └── adapter.rs    # Data transformation (Config/Tray -> PieItems)
-    ├── cursor.rs         # Wayland Virtual Pointer logic (wlr-protocols)
     ├── tray/             # System Tray & DBus Integration
     │   ├── mod.rs        # Module exports
     │   ├── watcher.rs    # StatusNotifierWatcher (SNI) implementation
     │   └── client.rs     # DBusMenu client & Activation logic
     ├── config.rs         # Configuration Data Structures & Loading logic
     ├── utils.rs          # Geometry (Polar/Cartesian), App Spawning, & Config Path logic
+    ├── cursor.rs         # Wayland Virtual Pointer logic (wlr-protocols)
     └── color.rs          # Color parsing and utility functions
 ```
 
@@ -52,8 +52,8 @@ waypie/
     *   **Hybrid Watcher:** Acts as a `StatusNotifierWatcher` server on environments that lack one (like Hyprland) or a client on environments that have one (like KDE).
     *   **Event-Driven:** Reactive updates using DBus signals instead of polling.
     *   **Path Auto-Discovery:** Uses recursive DBus introspection to find the correct object path for apps with non-standard tray implementations (e.g., Electron apps).
+    *   **Integrated DBusMenu Client:** Uses `zbus` and `system-tray` crate to fetch and map application context menus directly into the radial menu.
         *   **AboutToShow Support:** Explicitly triggers the `AboutToShow` DBus method to ensure dynamic items are populated before fetching.
-        *   **Signal Debouncing:** Implements a 75ms debounce timer for `layout-updated` signals to handle applications that update their menu structure in multiple asynchronous bursts (like Fcitx5).
     *   **Interactive Tray Icons:** Support for left-click (activate) and right-click (context menu fetch and display). Actions are routed back via `com.canonical.dbusmenu.Event` signals.
 *   **"Hyprland-Style" Animations:** 
     *   Smooth Linear Interpolation (Lerp) for ring expansions and fade-ins.

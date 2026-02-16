@@ -113,7 +113,7 @@ impl WidgetImpl for RadialMenu {
         let center_radius = ui.center_radius;
 
         // Background for center
-        let (r, g, b, a) = ui.center_color;
+        let (r, g, b, a) = ui.colors.center_color;
         cr.set_source_rgba(r, g, b, a);
         cr.arc(center_x, center_y, center_radius, 0.0, 2.0 * PI);
         cr.fill().unwrap();
@@ -121,7 +121,7 @@ impl WidgetImpl for RadialMenu {
         // Time
         let now = chrono::Local::now();
         let time_str = now.format("%H:%M").to_string();
-        let (tr, tg, tb) = ui.text_color;
+        let (tr, tg, tb) = ui.colors.text_color;
         cr.set_source_rgb(tr, tg, tb);
         cr.set_font_size(20.0);
         let ext = cr.text_extents(&time_str).unwrap();
@@ -144,13 +144,13 @@ impl WidgetImpl for RadialMenu {
 
             // Determine Color
             let (r, g, b, a) = if Some(i) == self.hover_parent_idx.get() {
-                ui.inner_ring_color_hover
+                ui.colors.inner_ring_color_hover
             } else if Some(i) == self.active_parent_idx.get() {
-                ui.inner_ring_color_active
+                ui.colors.inner_ring_color_active
             } else if i % 2 == 0 {
-                ui.inner_ring_color_even
+                ui.colors.inner_ring_color_even
             } else {
-                ui.inner_ring_color_odd
+                ui.colors.inner_ring_color_odd
             };
             cr.set_source_rgba(r, g, b, a);
 
@@ -168,7 +168,7 @@ impl WidgetImpl for RadialMenu {
             cr.fill().unwrap();
 
             // Stroke
-            let (sr, sg, sb) = ui.stroke_color;
+            let (sr, sg, sb) = ui.colors.stroke_color;
             cr.set_source_rgb(sr, sg, sb);
             cr.set_line_width(1.0);
             cr.stroke().unwrap();
@@ -219,11 +219,11 @@ impl WidgetImpl for RadialMenu {
 
                             // Color
                             let (r, g, b, a) = if Some(j) == self.hover_child_idx.get() {
-                                ui.outer_ring_color_hover
+                                ui.colors.outer_ring_color_hover
                             } else if j % 2 == 0 {
-                                ui.outer_ring_color_even
+                                ui.colors.outer_ring_color_even
                             } else {
-                                ui.outer_ring_color_odd
+                                ui.colors.outer_ring_color_odd
                             };
                             cr.set_source_rgba(r, g, b, a * alpha);
 
@@ -240,13 +240,13 @@ impl WidgetImpl for RadialMenu {
                             cr.fill().unwrap();
 
                             // Stroke
-                            let (sr, sg, sb) = ui.stroke_color;
+                            let (sr, sg, sb) = ui.colors.stroke_color;
                             cr.set_source_rgba(sr, sg, sb, alpha);
                             cr.set_line_width(1.0);
                             cr.stroke().unwrap();
 
                             // Text
-                            let (tr, tg, tb) = ui.text_color;
+                            let (tr, tg, tb) = ui.colors.text_color;
                             cr.set_source_rgba(tr, tg, tb, alpha);
                             cr.set_font_size(11.0);
                             let text_radius = (outer_radius_start + outer_radius_end) / 2.0;
