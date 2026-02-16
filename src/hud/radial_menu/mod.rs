@@ -17,8 +17,6 @@ pub struct PieItem {
 
 mod imp;
 
-use crate::sni_watcher::TrayItems;
-
 glib::wrapper! {
     pub struct RadialMenu(ObjectSubclass<imp::RadialMenu>)
         @extends gtk4::Widget;
@@ -32,10 +30,6 @@ impl RadialMenu {
     pub fn set_items(&self, items: Vec<PieItem>) {
         self.imp().items.replace(items);
         self.queue_draw();
-    }
-
-    pub fn set_tray_items(&self, items: TrayItems) {
-        self.imp().tray_items.replace(Some(items));
     }
 
     pub fn set_ui_config(&self, config: crate::config::UiConfig) {

@@ -24,7 +24,8 @@ wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 futures-util = "0.3.31"
 quick-xml = { version = "0.31", features = ["serialize"] }
-dbusmenu-glib-sys = "0.1.0"
+system-tray = "0.8.4"
+indexmap = "2.7.0"
 
 [profile.release]
 lto = true

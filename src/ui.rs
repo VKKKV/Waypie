@@ -16,8 +16,9 @@ pub fn build_ui(app: &Application) {
     let (sender, receiver) = async_channel::unbounded::<()>();
     let config_store_clone = config_store.clone();
 
-    let sni = SNIWatcher::new(Some(sender.clone()));
-    let tray_items = sni.items();
+    let sni = Arc::new(SNIWatcher::new(Some(sender.clone())));
+    let _ = crate::APP_STATE.set(sni.state.clone());
+    let sni_clone = sni.clone();
 
     // Spawn on global runtime
     crate::RUNTIME
@@ -25,7 +26,7 @@ pub fn build_ui(app: &Application) {
         .expect("Runtime not initialized")
         .spawn(async move {
             tokio::join!(config::watch_config(config_store_clone, sender), async {
-                let _ = sni.start().await;
+                let _ = sni_clone.start().await;
             });
         });
 
@@ -56,15 +57,10 @@ pub fn build_ui(app: &Application) {
 
     // 4. Create Radial Menu
     let radial_menu = RadialMenu::new();
-    radial_menu.set_tray_items(tray_items.clone());
     radial_menu.set_ui_config(initial_config.ui.clone());
 
     // Convert and set initial items
-    let initial_tray_list = if let Ok(items) = tray_items.lock() {
-        items.clone()
-    } else {
-        Vec::new()
-    };
+    let initial_tray_list = sni.get_legacy_items();
     let pie_items = convert_menu_items(&initial_config.menu, &initial_tray_list);
     radial_menu.set_items(pie_items);
 
@@ -98,22 +94,22 @@ pub fn build_ui(app: &Application) {
     // 5. Handle Config Updates
     let menu_weak = radial_menu.downgrade();
     let store_weak = Arc::downgrade(&config_store);
-    let tray_items_clone = tray_items.clone();
+    let sni_weak = Arc::downgrade(&sni);
 
     gtk4::glib::spawn_future_local(async move {
         while let Ok(_) = receiver.recv().await {
             if let Some(menu) = menu_weak.upgrade() {
                 if let Some(store) = store_weak.upgrade() {
                     if let Ok(cfg) = store.read() {
-                        let current_tray_items = if let Ok(items) = tray_items_clone.lock() {
-                            items.clone()
+                        let current_tray_items = if let Some(sni_up) = sni_weak.upgrade() {
+                            sni_up.get_legacy_items()
                         } else {
                             Vec::new()
                         };
                         let new_items = convert_menu_items(&cfg.menu, &current_tray_items);
                         menu.set_items(new_items);
                         menu.set_ui_config(cfg.ui.clone());
-                        println!("UI updated with new config.");
+                        // println!("UI refreshed (config or tray update)");
                     }
                 }
             }
@@ -142,7 +138,7 @@ fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> Vec<
                         let activate_action =
                             format!("activate|{}|{}|{}", tray.service, tray.path, tray.menu_path);
                         let context_action =
-                            format!("context|{}|{}|{}", tray.service, tray.path, tray.menu_path);
+                            format!("context|{}|{}|{}", tray.name, tray.path, tray.menu_path);
 
                         tray_children.push(PieItem {
                             label: tray.title.clone(),

@@ -1,6 +1,6 @@
 use gtk4::prelude::*;
 use gtk4::Application;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use tokio::runtime::Runtime;
 
 mod color;
@@ -15,6 +15,7 @@ mod utils;
 const APP_ID: &str = "com.arch.waypie";
 
 pub static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+pub static APP_STATE: OnceLock<Arc<sni_watcher::AppState>> = OnceLock::new();
 
 fn main() {
     RUNTIME

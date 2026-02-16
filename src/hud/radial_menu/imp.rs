@@ -7,13 +7,11 @@ use std::f64::consts::PI;
 use std::time::Instant;
 
 use super::PieItem;
-use crate::sni_watcher::TrayItems;
 
 #[derive(Default)]
 pub struct RadialMenu {
     // Data
     pub items: RefCell<Vec<PieItem>>,
-    pub tray_items: RefCell<Option<TrayItems>>,
     pub ui_config: RefCell<crate::config::UiConfig>,
 
     // State
