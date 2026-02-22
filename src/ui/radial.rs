@@ -279,8 +279,7 @@ impl RadialMenu {
                         let self_clone = self.clone();
 
                         gtk4::glib::spawn_future_local(async move {
-                            match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await
-                            {
+                            match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
                                 Ok(items) => {
                                     let items: Vec<PieItem> = items;
                                     println!(

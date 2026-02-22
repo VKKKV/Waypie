@@ -3,6 +3,46 @@ use zbus::Connection;
 
 use crate::ui::radial::PieItem;
 
+/// Tries to find the SNI object path by introspecting the DBus service.
+/// Returns the path if found, otherwise returns the original fallback path.
+async fn find_sni_path(conn: &Connection, service: &str, fallback_path: &str) -> String {
+    // Try the provided path first
+    if try_activate_path(conn, service, fallback_path).await {
+        return fallback_path.to_string();
+    }
+
+    // Try common SNI paths
+    let common_paths = vec![
+        "/org/kde/StatusNotifierItem",
+        "/org/ayatana/NotificationItem",
+        "/StatusNotifierItem",
+    ];
+
+    for path in common_paths {
+        if try_activate_path(conn, service, path).await {
+            eprintln!("Waypie: Found SNI path: {}", path);
+            return path.to_string();
+        }
+    }
+
+    eprintln!("Waypie: Could not find SNI path for {}, using fallback: {}", service, fallback_path);
+    fallback_path.to_string()
+}
+
+/// Helper to test if a path exists by checking introspection
+async fn try_activate_path(conn: &Connection, service: &str, path: &str) -> bool {
+    match conn.call_method(
+        Some(service),
+        path,
+        Some("org.freedesktop.DBus.Introspectable"),
+        "Introspect",
+        &(),
+    ).await {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
 /// Tries to activate the item via SNI `Activate` method.
 /// Returns `true` if activation succeeded.
 pub async fn activate_or_popup(
@@ -33,9 +73,13 @@ pub async fn activate_or_popup(
         .spawn(async move {
             let result = async {
                 let conn = Connection::session().await.map_err(|e| e.to_string())?;
+                
+                // Try to find the correct path
+                let actual_path = find_sni_path(&conn, &service_for_task, &item_path_for_task).await;
+                
                 conn.call_method(
                     Some(service_for_task.as_str()),
-                    item_path_for_task.as_str(),
+                    actual_path.as_str(),
                     Some("org.kde.StatusNotifierItem"),
                     "Activate",
                     &(x_int, y_int),
@@ -140,7 +184,7 @@ pub async fn fetch_dbus_menu_as_pie(name: String, path: String) -> Result<Vec<Pi
             let _ = client.about_to_show_menuitem(s, p, 0).await;
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         });
-    
+
     let _ = handle.await;
 
     if let Some(state) = crate::APP_STATE.get() {
@@ -150,5 +194,8 @@ pub async fn fetch_dbus_menu_as_pie(name: String, path: String) -> Result<Vec<Pi
         }
     }
 
-    Err(format!("Waypie: [Error] Menu not found in cache for {}", name))
+    Err(format!(
+        "Waypie: [Error] Menu not found in cache for {}",
+        name
+    ))
 }
