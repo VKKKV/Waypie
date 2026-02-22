@@ -27,10 +27,10 @@ Waypie is configured via a `config.toml` file located at `~/.config/waypie/confi
 
 ```toml
 [ui]
-width = 800
-height = 800
+width = 600
+height = 600
 center_radius = 100.0
-inner_radius = 200.0
+inner_radius = 250.0
 outer_radius = 400.0
 
 # Colors (Hex expression: #RRGGBB or #RRGGBBAA)
