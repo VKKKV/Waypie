@@ -111,5 +111,4 @@ Ensure you have the following installed:
 
 - **Type-Safe Actions:** Replaced string-based action dispatch with a compile-time checked `Action` enum featuring variants for commands, tray activation, context menus, and DBus signals.
 - **Optimized Hover Detection:** Refactored angle normalization and item calculation into reusable helper functions, reducing code duplication by ~35%.
-- **System-Tray Integration:** Replaced low-level zbus calls with higher-level `system-tray` crate's `ActivateRequest` API for cleaner, more maintainable tray activation.
 
