@@ -6,10 +6,90 @@ use std::time::{Duration, Instant};
 
 // 1. Data Structure
 #[derive(Clone, Debug)]
+pub enum Action {
+    Command(String),
+    Activate {
+        service: String,
+        path: String,
+        menu_path: String,
+    },
+    Context {
+        service: String,
+        path: String,
+        menu_path: String,
+    },
+    DbusSignal {
+        service: String,
+        path: String,
+        id: i32,
+    },
+    None,
+}
+
+impl Action {
+    pub fn from_string(s: String) -> Self {
+        if s.is_empty() {
+            return Action::None;
+        }
+
+        if let Some(rest) = s.strip_prefix("activate|") {
+            let parts: Vec<&str> = rest.splitn(3, '|').collect();
+            if parts.len() == 3 {
+                return Action::Activate {
+                    service: parts[0].to_string(),
+                    path: parts[1].to_string(),
+                    menu_path: parts[2].to_string(),
+                };
+            }
+        } else if let Some(rest) = s.strip_prefix("context|") {
+            let parts: Vec<&str> = rest.splitn(3, '|').collect();
+            if parts.len() == 3 {
+                return Action::Context {
+                    service: parts[0].to_string(),
+                    path: parts[1].to_string(),
+                    menu_path: parts[2].to_string(),
+                };
+            }
+        } else if let Some(rest) = s.strip_prefix("dbus_signal|") {
+            let parts: Vec<&str> = rest.splitn(3, '|').collect();
+            if parts.len() == 3 {
+                if let Ok(id) = parts[2].parse::<i32>() {
+                    return Action::DbusSignal {
+                        service: parts[0].to_string(),
+                        path: parts[1].to_string(),
+                        id,
+                    };
+                }
+            }
+        }
+
+        Action::Command(s)
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Action::Command(cmd) => cmd.clone(),
+            Action::Activate {
+                service,
+                path,
+                menu_path,
+            } => format!("activate|{}|{}|{}", service, path, menu_path),
+            Action::Context {
+                service,
+                path,
+                menu_path,
+            } => format!("context|{}|{}|{}", service, path, menu_path),
+            Action::DbusSignal { service, path, id } => format!("dbus_signal|{}|{}|{}", service, path, id),
+            Action::None => String::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct PieItem {
     pub label: String,
     pub icon: String,
-    pub action: String,
+    pub action: Action,
     pub children: Vec<PieItem>,
     pub item_type: Option<String>,
     pub tray_id: Option<String>,
@@ -216,9 +296,17 @@ impl RadialMenu {
                         if child.item_type.as_deref() == Some("tray_app")
                             && button == gtk4::gdk::BUTTON_SECONDARY
                         {
-                            if child.action.starts_with("activate|") {
-                                clicked_action =
-                                    Some(child.action.replace("activate|", "context|"));
+                            if let Action::Activate {
+                                service,
+                                path,
+                                menu_path,
+                            } = &child.action
+                            {
+                                clicked_action = Some(Action::Context {
+                                    service: service.clone(),
+                                    path: path.clone(),
+                                    menu_path: menu_path.clone(),
+                                });
                             } else {
                                 clicked_action = Some(child.action.clone());
                             }
@@ -238,109 +326,91 @@ impl RadialMenu {
 
         // 3. Execute Action
         if let Some(action) = clicked_action {
-            if !action.is_empty() {
-                let action_clone = action.clone();
-
-                if action_clone.starts_with("activate|") {
+            match action {
+                Action::Activate {
+                    service,
+                    path,
+                    menu_path,
+                } => {
                     let self_clone = self.clone();
                     gtk4::glib::spawn_future_local(async move {
-                        let parts: Vec<&str> = action_clone.splitn(4, '|').collect();
-                        if parts.len() == 4 {
-                            let service = parts[1].to_string();
-                            let path = parts[2].to_string();
-                            let menu_path = parts[3].to_string();
+                        let success = crate::tray::activate_or_popup(
+                            service,
+                            path,
+                            menu_path,
+                            self_clone.upcast_ref::<gtk4::Widget>().clone(),
+                            x,
+                            y,
+                        )
+                        .await;
 
-                            // Try Activate, Fallback to Popup
-                            let success = crate::tray::activate_or_popup(
-                                service,
-                                path,
-                                menu_path,
-                                self_clone.upcast_ref::<gtk4::Widget>().clone(),
-                                x,
-                                y,
-                            )
-                            .await;
-
-                            if success {
-                                std::process::exit(0);
-                            }
-                        } else {
-                            // Fallback for old/broken config or tray items?
-                            // Or just log error.
-                            eprintln!("Waypie: Invalid activate action format: {}", action_clone);
+                        if success {
                             std::process::exit(0);
                         }
                     });
-                } else if action_clone.starts_with("context|") {
-                    let parts: Vec<&str> = action_clone.splitn(4, '|').collect();
-                    if parts.len() >= 4 {
-                        let service = parts[1].to_string();
-                        let menu_path = parts[3].to_string();
-                        let self_clone = self.clone();
+                }
+                Action::Context {
+                    service,
+                    menu_path,
+                    ..
+                } => {
+                    let self_clone = self.clone();
+                    gtk4::glib::spawn_future_local(async move {
+                        match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
+                            Ok(items) => {
+                                println!(
+                                    "Waypie: Context menu fetched with {} items",
+                                    items.len()
+                                );
+                                self_clone.set_items(items);
+                            }
+                            Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
+                        }
+                    });
+                }
+                Action::DbusSignal { service, path, id } => {
+                    crate::RUNTIME
+                        .get()
+                        .expect("Runtime not initialized")
+                        .spawn(async move {
+                            match zbus::Connection::session().await {
+                                Ok(conn) => {
+                                    let result = conn
+                                        .call_method(
+                                            Some(service.as_str()),
+                                            path.as_str(),
+                                            Some("com.canonical.dbusmenu"),
+                                            "Event",
+                                            &(
+                                                id,
+                                                "clicked",
+                                                zbus::zvariant::Value::Str("".into()),
+                                                0u32,
+                                            ),
+                                        )
+                                        .await;
 
-                        gtk4::glib::spawn_future_local(async move {
-                            match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
-                                Ok(items) => {
-                                    let items: Vec<PieItem> = items;
-                                    println!(
-                                        "Waypie: Context menu fetched with {} items",
-                                        items.len()
-                                    );
-                                    self_clone.set_items(items);
+                                    match result {
+                                        Ok(_) => std::process::exit(0),
+                                        Err(e) => eprintln!("Waypie: DBus Event failed: {}", e),
+                                    }
                                 }
-                                Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
+                                Err(e) => {
+                                    eprintln!("Waypie: Failed to connect to session bus: {}", e)
+                                }
                             }
                         });
-                    }
-                } else if action_clone.starts_with("dbus_signal|") {
-                    let parts: Vec<&str> = action_clone.splitn(4, '|').collect();
-                    if parts.len() >= 4 {
-                        let service = parts[1].to_string();
-                        let path = parts[2].to_string();
-                        let id = parts[3].parse::<i32>().unwrap_or(0);
-
-                        crate::RUNTIME
-                            .get()
-                            .expect("Runtime not initialized")
-                            .spawn(async move {
-                                match zbus::Connection::session().await {
-                                    Ok(conn) => {
-                                        let result = conn
-                                            .call_method(
-                                                Some(service.as_str()),
-                                                path.as_str(),
-                                                Some("com.canonical.dbusmenu"),
-                                                "Event",
-                                                &(
-                                                    id,
-                                                    "clicked",
-                                                    zbus::zvariant::Value::Str("".into()),
-                                                    0u32,
-                                                ),
-                                            )
-                                            .await;
-
-                                        match result {
-                                            Ok(_) => std::process::exit(0),
-                                            Err(e) => eprintln!("Waypie: DBus Event failed: {}", e),
-                                        }
-                                    }
-                                    Err(e) => {
-                                        eprintln!("Waypie: Failed to connect to session bus: {}", e)
-                                    }
-                                }
-                            });
-                    }
-                } else {
-                    if let Err(e) = crate::utils::spawn_app(&action_clone) {
-                        eprintln!(
-                            "Waypie: Failed to execute command '{}': {}",
-                            action_clone, e
-                        );
-                    } else {
-                        std::process::exit(0);
+                }
+                Action::Command(cmd) => {
+                    if !cmd.is_empty() {
+                        if let Err(e) = crate::utils::spawn_app(&cmd) {
+                            eprintln!("Waypie: Failed to execute command '{}': {}", cmd, e);
+                        } else {
+                            std::process::exit(0);
+                        }
                     }
                 }
+                Action::None => {}
             }
         }
     }

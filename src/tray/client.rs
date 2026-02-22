@@ -1,49 +1,9 @@
 use system_tray::menu::{MenuItem, MenuType, TrayMenu};
-use zbus::Connection;
+use system_tray::client::ActivateRequest;
 
-use crate::ui::radial::PieItem;
+use crate::ui::radial::{Action, PieItem};
 
-/// Tries to find the SNI object path by introspecting the DBus service.
-/// Returns the path if found, otherwise returns the original fallback path.
-async fn find_sni_path(conn: &Connection, service: &str, fallback_path: &str) -> String {
-    // Try the provided path first
-    if try_activate_path(conn, service, fallback_path).await {
-        return fallback_path.to_string();
-    }
-
-    // Try common SNI paths
-    let common_paths = vec![
-        "/org/kde/StatusNotifierItem",
-        "/org/ayatana/NotificationItem",
-        "/StatusNotifierItem",
-    ];
-
-    for path in common_paths {
-        if try_activate_path(conn, service, path).await {
-            eprintln!("Waypie: Found SNI path: {}", path);
-            return path.to_string();
-        }
-    }
-
-    eprintln!("Waypie: Could not find SNI path for {}, using fallback: {}", service, fallback_path);
-    fallback_path.to_string()
-}
-
-/// Helper to test if a path exists by checking introspection
-async fn try_activate_path(conn: &Connection, service: &str, path: &str) -> bool {
-    match conn.call_method(
-        Some(service),
-        path,
-        Some("org.freedesktop.DBus.Introspectable"),
-        "Introspect",
-        &(),
-    ).await {
-        Ok(_) => true,
-        Err(_) => false,
-    }
-}
-
-/// Tries to activate the item via SNI `Activate` method.
+/// Tries to activate the item via SNI `Activate` method using system-tray client.
 /// Returns `true` if activation succeeded.
 pub async fn activate_or_popup(
     service: String,
@@ -54,16 +14,21 @@ pub async fn activate_or_popup(
     y: f64,
 ) -> bool {
     let service_clone = service.clone();
-
-    let service_for_task = service.clone();
-    let item_path_for_task = item_path.clone();
     let x_int = x as i32;
     let y_int = y as i32;
 
     println!(
         "Waypie: Attempting Activate for {} at {}...",
-        service_for_task, item_path_for_task
+        service, item_path
     );
+
+    // Clone the client before spawning
+    let client = if let Some(state) = crate::APP_STATE.get() {
+        state.client.lock().unwrap().clone()
+    } else {
+        println!("Waypie: Client not initialized");
+        return false;
+    };
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -72,20 +37,15 @@ pub async fn activate_or_popup(
         .expect("Runtime not initialized")
         .spawn(async move {
             let result = async {
-                let conn = Connection::session().await.map_err(|e| e.to_string())?;
-                
-                // Try to find the correct path
-                let actual_path = find_sni_path(&conn, &service_for_task, &item_path_for_task).await;
-                
-                conn.call_method(
-                    Some(service_for_task.as_str()),
-                    actual_path.as_str(),
-                    Some("org.kde.StatusNotifierItem"),
-                    "Activate",
-                    &(x_int, y_int),
-                )
-                .await
-                .map_err(|e| e.to_string())
+                if let Some(client) = client {
+                    let req = ActivateRequest::Default {
+                        address: service,
+                        x: x_int,
+                        y: y_int,
+                    };
+                    return client.activate(req).await.map_err(|e| e.to_string());
+                }
+                Err("Waypie: Client not initialized".to_string())
             }
             .await;
 
@@ -130,8 +90,11 @@ pub fn convert_menu_item_to_pie(item: &MenuItem, service: &str, path: &str) -> O
         .clone()
         .unwrap_or_else(|| "view-more-symbolic".to_string());
 
-    // Construct action string: "dbus_signal|service|path|ID"
-    let action = format!("dbus_signal|{}|{}|{}", service, path, item.id);
+    let action = Action::DbusSignal {
+        service: service.to_string(),
+        path: path.to_string(),
+        id: item.id,
+    };
 
     let mut children = Vec::new();
     for child in &item.submenu {

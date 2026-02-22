@@ -1,5 +1,5 @@
 use crate::config::MenuItemConfig;
-use crate::ui::radial::PieItem;
+use crate::ui::radial::{PieItem, Action};
 use crate::tray::TrayItem;
 
 pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> Vec<PieItem> {
@@ -13,17 +13,23 @@ pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> 
                     tray_children.push(PieItem {
                         label: "Empty".to_string(),
                         icon: "emblem-important".to_string(),
-                        action: "".to_string(),
+                        action: Action::None,
                         children: vec![],
                         item_type: None,
                         tray_id: None,
                     });
                 } else {
                     for tray in tray_items {
-                        let activate_action =
-                            format!("activate|{}|{}|{}", tray.service, tray.path, tray.menu_path);
-                        let context_action =
-                            format!("context|{}|{}|{}", tray.name, tray.path, tray.menu_path);
+                        let activate_action = Action::Activate {
+                            service: tray.service.clone(),
+                            path: tray.path.clone(),
+                            menu_path: tray.menu_path.clone(),
+                        };
+                        let context_action = Action::Context {
+                            service: tray.name.clone(),
+                            path: tray.path.clone(),
+                            menu_path: tray.menu_path.clone(),
+                        };
 
                         tray_children.push(PieItem {
                             label: tray.title.clone(),
@@ -46,7 +52,7 @@ pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> 
                 PieItem {
                     label: item.label.clone(),
                     icon: item.icon.clone(),
-                    action: item.action.clone(),
+                    action: Action::from_string(item.action.clone()),
                     children: tray_children,
                     item_type: item.item_type.clone(),
                     tray_id: None,
@@ -55,7 +61,7 @@ pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> 
                 PieItem {
                     label: item.label.clone(),
                     icon: item.icon.clone(),
-                    action: item.action.clone(),
+                    action: Action::from_string(item.action.clone()),
                     children: convert_menu_items(&item.children, tray_items),
                     item_type: item.item_type.clone(),
                     tray_id: None,
