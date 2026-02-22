@@ -2,6 +2,9 @@ pub mod window;
 pub mod radial;
 pub mod radial_imp;
 pub mod adapter;
+pub mod menu_model;
+pub mod hover_state;
+pub mod action_handler;
 
 use gtk4::prelude::*;
 use gtk4::Application;
@@ -10,7 +13,6 @@ use std::sync::{Arc, RwLock};
 use crate::config;
 use crate::tray::SNIWatcher;
 
-// Use our new local modules
 pub use radial::RadialMenu;
 pub use adapter::convert_menu_items;
 

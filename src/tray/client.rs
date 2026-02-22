@@ -1,7 +1,7 @@
 use system_tray::menu::{MenuItem, MenuType, TrayMenu};
 use system_tray::client::ActivateRequest;
 
-use crate::ui::radial::{Action, PieItem};
+use crate::ui::menu_model::{Action, PieItem};
 
 /// Tries to activate the item via SNI `Activate` method using system-tray client.
 /// Returns `true` if activation succeeded.
@@ -40,8 +40,8 @@ pub async fn activate_or_popup(
                 if let Some(client) = client {
                     let req = ActivateRequest::Default {
                         address: service,
-                        x: x_int,
-                        y: y_int,
+                        x: 0,
+                        y: 0,
                     };
                     return client.activate(req).await.map_err(|e| e.to_string());
                 }

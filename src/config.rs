@@ -136,13 +136,13 @@ fn default_height() -> i32 {
     600
 }
 fn default_center_radius() -> f64 {
-    40.0
-}
-fn default_inner_radius() -> f64 {
     100.0
 }
+fn default_inner_radius() -> f64 {
+    250.0
+}
 fn default_outer_radius() -> f64 {
-    200.0
+    400.0
 }
 
 // Default Colors (Hex Expression)

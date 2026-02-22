@@ -4,98 +4,11 @@ use gtk4::subclass::prelude::*;
 use gtk4::GestureClick;
 use std::time::{Duration, Instant};
 
-// 1. Data Structure
-#[derive(Clone, Debug)]
-pub enum Action {
-    Command(String),
-    Activate {
-        service: String,
-        path: String,
-        menu_path: String,
-    },
-    Context {
-        service: String,
-        path: String,
-        menu_path: String,
-    },
-    DbusSignal {
-        service: String,
-        path: String,
-        id: i32,
-    },
-    None,
-}
-
-impl Action {
-    pub fn from_string(s: String) -> Self {
-        if s.is_empty() {
-            return Action::None;
-        }
-
-        if let Some(rest) = s.strip_prefix("activate|") {
-            let parts: Vec<&str> = rest.splitn(3, '|').collect();
-            if parts.len() == 3 {
-                return Action::Activate {
-                    service: parts[0].to_string(),
-                    path: parts[1].to_string(),
-                    menu_path: parts[2].to_string(),
-                };
-            }
-        } else if let Some(rest) = s.strip_prefix("context|") {
-            let parts: Vec<&str> = rest.splitn(3, '|').collect();
-            if parts.len() == 3 {
-                return Action::Context {
-                    service: parts[0].to_string(),
-                    path: parts[1].to_string(),
-                    menu_path: parts[2].to_string(),
-                };
-            }
-        } else if let Some(rest) = s.strip_prefix("dbus_signal|") {
-            let parts: Vec<&str> = rest.splitn(3, '|').collect();
-            if parts.len() == 3 {
-                if let Ok(id) = parts[2].parse::<i32>() {
-                    return Action::DbusSignal {
-                        service: parts[0].to_string(),
-                        path: parts[1].to_string(),
-                        id,
-                    };
-                }
-            }
-        }
-
-        Action::Command(s)
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            Action::Command(cmd) => cmd.clone(),
-            Action::Activate {
-                service,
-                path,
-                menu_path,
-            } => format!("activate|{}|{}|{}", service, path, menu_path),
-            Action::Context {
-                service,
-                path,
-                menu_path,
-            } => format!("context|{}|{}|{}", service, path, menu_path),
-            Action::DbusSignal { service, path, id } => {
-                format!("dbus_signal|{}|{}|{}", service, path, id)
-            }
-            Action::None => String::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PieItem {
-    pub label: String,
-    pub icon: String,
-    pub action: Action,
-    pub children: Vec<PieItem>,
-    pub item_type: Option<String>,
-    pub tray_id: Option<String>,
-}
+use crate::ui::action_handler;
+use crate::ui::hover_state::{
+    calculate_hovered_item, get_child_count, get_hover_zone, normalize_angle, HoverZone,
+};
+pub use crate::ui::menu_model::{Action, PieItem};
 
 use super::radial_imp;
 
@@ -119,23 +32,6 @@ impl RadialMenu {
         self.queue_draw();
     }
 
-    fn normalize_angle(angle: f64) -> f64 {
-        let mut normalized = angle + 90.0;
-        if normalized < 0.0 {
-            normalized += 360.0;
-        }
-        normalized
-    }
-
-    fn calculate_hovered_item(angle: f64, item_count: usize) -> Option<usize> {
-        if item_count == 0 {
-            return None;
-        }
-        let angle_per_item = 360.0 / item_count as f64;
-        let idx = (angle / angle_per_item).floor() as usize;
-        Some(idx.min(item_count - 1))
-    }
-
     pub fn handle_motion(&self, x: f64, y: f64) {
         let imp = self.imp();
         let w = self.width() as f64;
@@ -154,43 +50,50 @@ impl RadialMenu {
         let mut should_redraw = false;
         let mut reset_hover_child = true;
         let ui = imp.ui_config.borrow();
-        let norm_angle = Self::normalize_angle(angle_deg);
+        let norm_angle = normalize_angle(angle_deg);
 
-        if dist <= ui.center_radius {
-            if imp.hover_parent_idx.get().is_some() {
-                imp.hover_parent_idx.set(None);
-                imp.hover_start_time.set(None);
-                should_redraw = true;
-            }
-        } else if dist <= ui.inner_radius {
-            if let Some(idx) = Self::calculate_hovered_item(norm_angle, parent_count) {
-                if imp.hover_parent_idx.get() != Some(idx) {
-                    imp.hover_parent_idx.set(Some(idx));
-                    imp.hover_start_time.set(Some(Instant::now()));
+        match get_hover_zone(dist, ui.center_radius, ui.inner_radius, ui.outer_radius) {
+            HoverZone::Center => {
+                if imp.hover_parent_idx.get().is_some() {
+                    imp.hover_parent_idx.set(None);
+                    imp.hover_start_time.set(None);
                     should_redraw = true;
                 }
             }
-        } else if dist >= ui.inner_radius + 10.0 && dist <= ui.outer_radius {
-            if let Some(active_idx) = imp.active_parent_idx.get() {
-                let child_count = items.get(active_idx).map(|p| p.children.len()).unwrap_or(0);
-                if child_count > 0 {
-                    if let Some(idx) = Self::calculate_hovered_item(norm_angle, child_count) {
-                        if imp.hover_child_idx.get() != Some(idx) {
-                            imp.hover_child_idx.set(Some(idx));
-                            should_redraw = true;
-                        }
-                        reset_hover_child = false;
+            HoverZone::InnerRing => {
+                if let Some(idx) = calculate_hovered_item(norm_angle, parent_count) {
+                    if imp.hover_parent_idx.get() != Some(idx) {
+                        imp.hover_parent_idx.set(Some(idx));
+                        imp.hover_start_time.set(Some(Instant::now()));
+                        should_redraw = true;
                     }
                 }
-            } else if imp.hover_parent_idx.get().is_some() {
-                imp.hover_parent_idx.set(None);
-                imp.hover_start_time.set(None);
-                should_redraw = true;
             }
-        } else if imp.hover_parent_idx.get().is_some() {
-            imp.hover_parent_idx.set(None);
-            imp.hover_start_time.set(None);
-            should_redraw = true;
+            HoverZone::OuterRing => {
+                if let Some(active_idx) = imp.active_parent_idx.get() {
+                    let child_count = get_child_count(&items, active_idx);
+                    if child_count > 0 {
+                        if let Some(idx) = calculate_hovered_item(norm_angle, child_count) {
+                            if imp.hover_child_idx.get() != Some(idx) {
+                                imp.hover_child_idx.set(Some(idx));
+                                should_redraw = true;
+                            }
+                            reset_hover_child = false;
+                        }
+                    }
+                } else if imp.hover_parent_idx.get().is_some() {
+                    imp.hover_parent_idx.set(None);
+                    imp.hover_start_time.set(None);
+                    should_redraw = true;
+                }
+            }
+            HoverZone::Outside => {
+                if imp.hover_parent_idx.get().is_some() {
+                    imp.hover_parent_idx.set(None);
+                    imp.hover_start_time.set(None);
+                    should_redraw = true;
+                }
+            }
         }
 
         if reset_hover_child && imp.hover_child_idx.get().is_some() {
@@ -207,12 +110,8 @@ impl RadialMenu {
         let imp = self.imp();
         imp.hover_parent_idx.set(None);
         imp.hover_child_idx.set(None);
-
-        // Don't reset active parent immediately on leave if you want it to stay open?
-        // Prompt says "If mouse leaves logic area: Reset state."
         imp.active_parent_idx.set(None);
-        imp.target_progress.set(0.0); // Animate out
-
+        imp.target_progress.set(0.0);
         self.queue_draw();
     }
 
@@ -225,12 +124,7 @@ impl RadialMenu {
                     if start_time.elapsed() >= Duration::from_millis(100) {
                         imp.active_parent_idx.set(Some(hover_idx));
 
-                        let child_count = imp
-                            .items
-                            .borrow()
-                            .get(hover_idx)
-                            .map(|p| p.children.len())
-                            .unwrap_or(0);
+                        let child_count = get_child_count(&imp.items.borrow(), hover_idx);
                         let target = if child_count > 0 { 1.0 } else { 0.0 };
 
                         if (imp.target_progress.get() - target).abs() > 0.001 {
@@ -256,13 +150,11 @@ impl RadialMenu {
         let items = imp.items.borrow();
         let button = gesture.current_button();
 
-        // 1. Check Center Click
         let ui = imp.ui_config.borrow();
         if dist < ui.center_radius {
             std::process::exit(0);
         }
 
-        // 2. Determine Action
         let mut clicked_action = None;
 
         if let Some(child_idx) = imp.hover_child_idx.get() {
@@ -270,7 +162,8 @@ impl RadialMenu {
                 if let Some(parent) = items.get(active_idx) {
                     if let Some(child) = parent.children.get(child_idx) {
                         if child.item_type.as_deref() == Some("tray_app")
-                            && button == gtk4::gdk::BUTTON_PRIMARY || button == gtk4::gdk::BUTTON_SECONDARY
+                            && button == gtk4::gdk::BUTTON_SECONDARY
+                            || button == gtk4::gdk::BUTTON_PRIMARY
                         {
                             if let Action::Activate {
                                 service,
@@ -300,7 +193,6 @@ impl RadialMenu {
             }
         }
 
-        // 3. Execute Action
         if let Some(action) = clicked_action {
             match action {
                 Action::Activate {
