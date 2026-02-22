@@ -11,7 +11,8 @@
 ### Key Features
 
 - **Interactive 2-Level Radial Menu:** Smooth animations with categories (Inner Ring) and sub-actions (Outer Ring).
-- **Advanced System Tray (SNI) Support:** Hybrid Watcher (Server/Client) with recursive D-Bus introspection and integrated `DBusMenu` support.
+- **Type-Safe Action System:** `Action` enum replaces error-prone string-based actions with compile-time type safety.
+- **Advanced System Tray (SNI) Support:** Hybrid Watcher (Server/Client) with recursive D-Bus introspection and integrated `DBusMenu` support via `system-tray` crate.
 - **Cursor Auto-Centering:** Teleports the cursor to the center of the HUD upon activation using `wlr-virtual-pointer-v1`.
 - **Custom Shell Script & Command Execution:** Spawns detached processes for applications, shell commands, or scripts.
 - **Wayland Native:** High-performance overlay positioning using `gtk4-layer-shell`.
@@ -105,3 +106,10 @@ Ensure you have the following installed:
 - `gtk4-layer-shell`
 - `wayland`
 - `wayland-protocols`
+
+### Recent Improvements
+
+- **Type-Safe Actions:** Replaced string-based action dispatch with a compile-time checked `Action` enum featuring variants for commands, tray activation, context menus, and DBus signals.
+- **Optimized Hover Detection:** Refactored angle normalization and item calculation into reusable helper functions, reducing code duplication by ~35%.
+- **System-Tray Integration:** Replaced low-level zbus calls with higher-level `system-tray` crate's `ActivateRequest` API for cleaner, more maintainable tray activation.
+

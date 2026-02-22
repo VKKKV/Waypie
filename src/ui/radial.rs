@@ -79,7 +79,9 @@ impl Action {
                 path,
                 menu_path,
             } => format!("context|{}|{}|{}", service, path, menu_path),
-            Action::DbusSignal { service, path, id } => format!("dbus_signal|{}|{}|{}", service, path, id),
+            Action::DbusSignal { service, path, id } => {
+                format!("dbus_signal|{}|{}|{}", service, path, id)
+            }
             Action::None => String::new(),
         }
     }
@@ -117,13 +119,21 @@ impl RadialMenu {
         self.queue_draw();
     }
 
-    fn get_child_count(&self, parent_idx: usize) -> usize {
-        let imp = self.imp();
-        let items = imp.items.borrow();
-        if let Some(parent) = items.get(parent_idx) {
-            return parent.children.len();
+    fn normalize_angle(angle: f64) -> f64 {
+        let mut normalized = angle + 90.0;
+        if normalized < 0.0 {
+            normalized += 360.0;
         }
-        0
+        normalized
+    }
+
+    fn calculate_hovered_item(angle: f64, item_count: usize) -> Option<usize> {
+        if item_count == 0 {
+            return None;
+        }
+        let angle_per_item = 360.0 / item_count as f64;
+        let idx = (angle / angle_per_item).floor() as usize;
+        Some(idx.min(item_count - 1))
     }
 
     pub fn handle_motion(&self, x: f64, y: f64) {
@@ -144,79 +154,43 @@ impl RadialMenu {
         let mut should_redraw = false;
         let mut reset_hover_child = true;
         let ui = imp.ui_config.borrow();
-        let center_radius = ui.center_radius;
-        let inner_radius_end = ui.inner_radius;
-        let outer_radius_start = ui.inner_radius + 10.0;
-        let outer_radius_end = ui.outer_radius;
+        let norm_angle = Self::normalize_angle(angle_deg);
 
-        // --- Logic: Center ---
-        if dist <= center_radius {
+        if dist <= ui.center_radius {
             if imp.hover_parent_idx.get().is_some() {
                 imp.hover_parent_idx.set(None);
                 imp.hover_start_time.set(None);
                 should_redraw = true;
             }
-            // Ensure child hover is also reset if we move to center
-            reset_hover_child = true;
-        }
-        // --- Logic: Inner Ring (Parents) ---
-        else if dist <= inner_radius_end {
-            let angle_per_item = 360.0 / parent_count as f64;
-
-            let mut norm_angle = angle_deg + 90.0;
-            if norm_angle < 0.0 {
-                norm_angle += 360.0;
-            }
-
-            let idx = (norm_angle / angle_per_item).floor() as usize;
-            let idx = idx.min(parent_count - 1);
-
-            let current_hover = imp.hover_parent_idx.get();
-            if current_hover != Some(idx) {
-                imp.hover_parent_idx.set(Some(idx));
-                imp.hover_start_time.set(Some(Instant::now()));
-                should_redraw = true;
-            }
-
-            reset_hover_child = true;
-        }
-        // --- Logic: Outer Ring (Children) ---
-        else if dist >= outer_radius_start && dist <= outer_radius_end {
-            // Only if active parent exists
-            if let Some(active_idx) = imp.active_parent_idx.get() {
-                let child_count = self.get_child_count(active_idx);
-
-                if child_count > 0 {
-                    let angle_per_child = 360.0 / child_count as f64;
-                    let mut norm_angle = angle_deg + 90.0;
-                    if norm_angle < 0.0 {
-                        norm_angle += 360.0;
-                    }
-
-                    let idx = (norm_angle / angle_per_child).floor() as usize;
-                    let idx = idx.min(child_count - 1);
-
-                    if imp.hover_child_idx.get() != Some(idx) {
-                        imp.hover_child_idx.set(Some(idx));
-                        should_redraw = true;
-                    }
-                    reset_hover_child = false;
-                }
-            } else {
-                if imp.hover_parent_idx.get().is_some() {
-                    imp.hover_parent_idx.set(None);
-                    imp.hover_start_time.set(None);
+        } else if dist <= ui.inner_radius {
+            if let Some(idx) = Self::calculate_hovered_item(norm_angle, parent_count) {
+                if imp.hover_parent_idx.get() != Some(idx) {
+                    imp.hover_parent_idx.set(Some(idx));
+                    imp.hover_start_time.set(Some(Instant::now()));
                     should_redraw = true;
                 }
             }
-        }
-        // --- Logic: Outside or Dead Zone ---
-        else {
-            if imp.hover_parent_idx.get().is_some() {
+        } else if dist >= ui.inner_radius + 10.0 && dist <= ui.outer_radius {
+            if let Some(active_idx) = imp.active_parent_idx.get() {
+                let child_count = items.get(active_idx).map(|p| p.children.len()).unwrap_or(0);
+                if child_count > 0 {
+                    if let Some(idx) = Self::calculate_hovered_item(norm_angle, child_count) {
+                        if imp.hover_child_idx.get() != Some(idx) {
+                            imp.hover_child_idx.set(Some(idx));
+                            should_redraw = true;
+                        }
+                        reset_hover_child = false;
+                    }
+                }
+            } else if imp.hover_parent_idx.get().is_some() {
                 imp.hover_parent_idx.set(None);
                 imp.hover_start_time.set(None);
                 should_redraw = true;
             }
+        } else if imp.hover_parent_idx.get().is_some() {
+            imp.hover_parent_idx.set(None);
+            imp.hover_start_time.set(None);
+            should_redraw = true;
         }
 
         if reset_hover_child && imp.hover_child_idx.get().is_some() {
@@ -251,16 +225,18 @@ impl RadialMenu {
                     if start_time.elapsed() >= Duration::from_millis(100) {
                         imp.active_parent_idx.set(Some(hover_idx));
 
-                        // Fix Ghost Ring: Check if children exist
-                        let child_count = self.get_child_count(hover_idx);
+                        let child_count = imp
+                            .items
+                            .borrow()
+                            .get(hover_idx)
+                            .map(|p| p.children.len())
+                            .unwrap_or(0);
                         let target = if child_count > 0 { 1.0 } else { 0.0 };
 
                         if (imp.target_progress.get() - target).abs() > 0.001 {
                             imp.target_progress.set(target);
                             self.queue_draw();
                         } else {
-                            // If we switched active parent but animation target is same (e.g. 1.0 -> 1.0 or 0.0 -> 0.0),
-                            // we still need to redraw to show the new active parent highlight
                             self.queue_draw();
                         }
                     }
@@ -294,7 +270,7 @@ impl RadialMenu {
                 if let Some(parent) = items.get(active_idx) {
                     if let Some(child) = parent.children.get(child_idx) {
                         if child.item_type.as_deref() == Some("tray_app")
-                            && button == gtk4::gdk::BUTTON_SECONDARY
+                            && button == gtk4::gdk::BUTTON_PRIMARY || button == gtk4::gdk::BUTTON_SECONDARY
                         {
                             if let Action::Activate {
                                 service,
@@ -350,18 +326,13 @@ impl RadialMenu {
                     });
                 }
                 Action::Context {
-                    service,
-                    menu_path,
-                    ..
+                    service, menu_path, ..
                 } => {
                     let self_clone = self.clone();
                     gtk4::glib::spawn_future_local(async move {
                         match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
                             Ok(items) => {
-                                println!(
-                                    "Waypie: Context menu fetched with {} items",
-                                    items.len()
-                                );
+                                println!("Waypie: Context menu fetched with {} items", items.len());
                                 self_clone.set_items(items);
                             }
                             Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
