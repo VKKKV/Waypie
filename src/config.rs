@@ -1,5 +1,4 @@
 use crate::color::{self, ColorRGB, ColorRGBA};
-use directories::ProjectDirs;
 use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -38,7 +37,12 @@ pub struct UiConfig {
     #[serde(default = "default_outer_radius")]
     pub outer_radius: f64,
 
-    // Colors
+    #[serde(default)]
+    pub colors: ColorsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ColorsConfig {
     #[serde(
         default = "default_center_color",
         deserialize_with = "color::deserialize_color"
@@ -49,7 +53,7 @@ pub struct UiConfig {
         default = "default_text_color",
         deserialize_with = "color::deserialize_color"
     )]
-    pub text_color: ColorRGB, // Usually text is solid, but maybe RGBA? Let's stick to RGB for now or RGBA if imp.rs uses alpha for text fade. imp.rs uses set_source_rgb for text mostly, except outer ring which uses alpha multiplier. Let's use RGB for base text color. Wait, Outer ring text fades in. So maybe base color is RGB and we apply alpha in code.
+    pub text_color: ColorRGB,
 
     #[serde(
         default = "default_stroke_color",
@@ -103,6 +107,14 @@ impl Default for UiConfig {
             center_radius: default_center_radius(),
             inner_radius: default_inner_radius(),
             outer_radius: default_outer_radius(),
+            colors: ColorsConfig::default(),
+        }
+    }
+}
+
+impl Default for ColorsConfig {
+    fn default() -> Self {
+        Self {
             center_color: default_center_color(),
             text_color: default_text_color(),
             stroke_color: default_stroke_color(),
@@ -124,47 +136,47 @@ fn default_height() -> i32 {
     600
 }
 fn default_center_radius() -> f64 {
-    40.0
-}
-fn default_inner_radius() -> f64 {
     100.0
 }
+fn default_inner_radius() -> f64 {
+    250.0
+}
 fn default_outer_radius() -> f64 {
-    200.0
+    400.0
 }
 
-// Default Colors
+// Default Colors (Hex Expression)
 fn default_center_color() -> ColorRGBA {
-    (0.0, 0.0, 0.0, 0.5)
+    color::hex_to_color("#00000080").unwrap()
 }
 fn default_text_color() -> ColorRGB {
-    (1.0, 1.0, 1.0)
+    color::hex_to_color("#ffffff").unwrap()
 }
 fn default_stroke_color() -> ColorRGB {
-    (0.0, 0.0, 0.0)
+    color::hex_to_color("#000000").unwrap()
 }
 
 fn default_inner_even() -> ColorRGBA {
-    (0.1, 0.1, 0.1, 0.8)
+    color::hex_to_color("#1a1a1acc").unwrap()
 }
 fn default_inner_odd() -> ColorRGBA {
-    (0.15, 0.15, 0.15, 0.8)
+    color::hex_to_color("#262626cc").unwrap()
 }
 fn default_inner_hover() -> ColorRGBA {
-    (0.2, 0.2, 0.2, 0.9)
+    color::hex_to_color("#333333e6").unwrap()
 }
 fn default_inner_active() -> ColorRGBA {
-    (0.3, 0.3, 0.3, 0.9)
+    color::hex_to_color("#4d4d4de6").unwrap()
 }
 
 fn default_outer_even() -> ColorRGBA {
-    (0.1, 0.1, 0.1, 0.8)
+    color::hex_to_color("#1a1a1acc").unwrap()
 }
 fn default_outer_odd() -> ColorRGBA {
-    (0.15, 0.15, 0.15, 0.8)
+    color::hex_to_color("#262626cc").unwrap()
 }
 fn default_outer_hover() -> ColorRGBA {
-    (0.2, 0.4, 0.8, 0.9)
+    color::hex_to_color("#3366ccff").unwrap()
 }
 
 fn default_menu_items() -> Vec<MenuItemConfig> {
@@ -205,7 +217,6 @@ fn default_menu_items() -> Vec<MenuItemConfig> {
             children: vec![],
             item_type: None,
         },
-        // Example of a custom shell command action
         MenuItemConfig {
             label: "Script".to_string(),
             icon: "utilities-terminal".to_string(),
@@ -215,7 +226,7 @@ fn default_menu_items() -> Vec<MenuItemConfig> {
         },
         MenuItemConfig {
             label: "Tray".to_string(),
-            icon: "emblem-system".to_string(), // Generic icon
+            icon: "emblem-system".to_string(),
             action: "".to_string(),
             children: vec![],
             item_type: Some("tray".to_string()),
@@ -238,7 +249,7 @@ pub struct MenuItemConfig {
 
 // 2. Loading Logic
 pub fn load_config() -> Config {
-    let path = get_config_path();
+    let path = crate::utils::get_config_path();
     if let Some(p) = &path {
         if p.exists() {
             match fs::read_to_string(p) {
@@ -268,16 +279,11 @@ pub fn load_config() -> Config {
     Config::default()
 }
 
-fn get_config_path() -> Option<PathBuf> {
-    ProjectDirs::from("org", "waypie", "waypie").map(|proj| proj.config_dir().join("config.toml"))
-}
-
 // 3. Watcher Setup
 pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_channel::Sender<()>) {
-    let path = get_config_path().unwrap_or_else(|| PathBuf::from("config.toml"));
+    let path = crate::utils::get_config_path().unwrap_or_else(|| PathBuf::from("config.toml"));
     let (tx, mut rx) = mpsc::channel(1);
 
-    // Create a watcher that sends events to the channel
     let mut watcher = RecommendedWatcher::new(
         move |res| {
             let _ = tx.blocking_send(res);
@@ -286,23 +292,19 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
     )
     .expect("Failed to create file watcher");
 
-    // Watch the directory (parent of config file) to handle editors that use atomic saves (rename/move)
     let watch_target = path.parent().unwrap_or(&path);
     if let Err(e) = watcher.watch(watch_target, RecursiveMode::NonRecursive) {
         eprintln!("Failed to watch config directory: {}", e);
         return;
     }
 
-    // Process events
     while let Some(res) = rx.recv().await {
         match res {
             Ok(event) => {
-                // Check if the specific config file was modified/created
                 let relevant = event.paths.iter().any(|p| p.ends_with("config.toml"));
 
                 if relevant {
                     println!("Config file changed. Reloading...");
-                    // Give fs a moment to settle (some editors write empty files first)
                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
                     match fs::read_to_string(&path) {
