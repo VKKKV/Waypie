@@ -4,7 +4,6 @@ pub mod radial_imp;
 pub mod adapter;
 pub mod menu_model;
 pub mod hover_state;
-pub mod action_handler;
 
 use gtk4::prelude::*;
 use gtk4::Application;
@@ -83,7 +82,7 @@ pub fn build_ui(app: &Application) {
     let sni_weak = Arc::downgrade(&sni);
 
     gtk4::glib::spawn_future_local(async move {
-        while let Ok(_) = receiver.recv().await {
+        while receiver.recv().await.is_ok() {
             if let Some(menu) = menu_weak.upgrade() {
                 if let Some(store) = store_weak.upgrade() {
                     if let Ok(cfg) = store.read() {

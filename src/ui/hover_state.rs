@@ -2,33 +2,6 @@
 /// Responsible for determining which menu item is under the cursor
 use crate::ui::menu_model::PieItem;
 
-pub struct HoverState {
-    pub parent_idx: Option<usize>,
-    pub child_idx: Option<usize>,
-    pub active_parent_idx: Option<usize>,
-}
-
-impl HoverState {
-    pub fn new() -> Self {
-        HoverState {
-            parent_idx: None,
-            child_idx: None,
-            active_parent_idx: None,
-        }
-    }
-
-    pub fn reset_hover(&mut self) {
-        self.parent_idx = None;
-        self.child_idx = None;
-    }
-
-    pub fn reset_all(&mut self) {
-        self.parent_idx = None;
-        self.child_idx = None;
-        self.active_parent_idx = None;
-    }
-}
-
 /// Normalize angle to 0-360 range with 90° offset
 pub fn normalize_angle(angle: f64) -> f64 {
     let mut normalized = angle + 90.0;

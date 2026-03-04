@@ -38,30 +38,41 @@ impl ObjectImpl for RadialMenu {
         let obj = self.obj();
 
         // Clock Timer
-        gtk4::glib::timeout_add_local(
-            std::time::Duration::from_secs(1),
-            glib::clone!(@weak obj => @default-return glib::ControlFlow::Break, move || {
+        let weak_obj = obj.downgrade();
+        gtk4::glib::timeout_add_local(std::time::Duration::from_secs(1), move || {
+            if let Some(obj) = weak_obj.upgrade() {
                 obj.queue_draw();
                 glib::ControlFlow::Continue
-            }),
-        );
+            } else {
+                glib::ControlFlow::Break
+            }
+        });
 
         // Motion Controller
         let motion = EventControllerMotion::new();
-        motion.connect_motion(glib::clone!(@weak obj => move |_, x, y| {
-            obj.handle_motion(x, y);
-        }));
-        motion.connect_leave(glib::clone!(@weak obj => move |_| {
-            obj.handle_leave();
-        }));
+        let weak_obj = obj.downgrade();
+        motion.connect_motion(move |_, x, y| {
+            if let Some(obj) = weak_obj.upgrade() {
+                obj.handle_motion(x, y);
+            }
+        });
+        let weak_obj = obj.downgrade();
+        motion.connect_leave(move |_| {
+            if let Some(obj) = weak_obj.upgrade() {
+                obj.handle_leave();
+            }
+        });
         obj.add_controller(motion);
 
         // Click Controller
         let click = GestureClick::new();
         click.set_button(0);
-        click.connect_pressed(glib::clone!(@weak obj => move |gesture, n_press, x, y| {
-            obj.handle_click(gesture, n_press, x, y);
-        }));
+        let weak_obj = obj.downgrade();
+        click.connect_pressed(move |gesture, n_press, x, y| {
+            if let Some(obj) = weak_obj.upgrade() {
+                obj.handle_click(gesture, n_press, x, y);
+            }
+        });
         obj.add_controller(click);
 
         // Hover Timer

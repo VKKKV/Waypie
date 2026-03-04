@@ -4,7 +4,6 @@ use gtk4::subclass::prelude::*;
 use gtk4::GestureClick;
 use std::time::{Duration, Instant};
 
-use crate::ui::action_handler;
 use crate::ui::hover_state::{
     calculate_hovered_item, get_child_count, get_hover_zone, normalize_angle, HoverZone,
 };

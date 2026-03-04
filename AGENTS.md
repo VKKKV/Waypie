@@ -171,3 +171,8 @@ If Cursor rules are added later, treat them as high-priority repository policy a
 - If tests exist or were added, run targeted tests first, then `cargo test`.
 - Keep diffs focused; avoid opportunistic refactors unless directly relevant.
 - Preserve behavior unless task explicitly requests behavioral changes.
+
+## Future Development Notes
+
+- Add config file I/O tests by extracting small parse/load helpers from `load_config()` so behavior can be tested without touching real user config directories.
+- Prioritize cases for missing file creation, invalid TOML fallback, and write failures when generating defaults.

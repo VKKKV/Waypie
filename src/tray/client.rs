@@ -40,8 +40,8 @@ pub async fn activate_or_popup(
                 if let Some(client) = client {
                     let req = ActivateRequest::Default {
                         address: service,
-                        x: 0,
-                        y: 0,
+                        x: x_int,
+                        y: y_int,
                     };
                     return client.activate(req).await.map_err(|e| e.to_string());
                 }
