@@ -354,7 +354,10 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, UiConfig};
+    use super::{load_config_from_path, parse_config_str, reload_config_from_path, Config, UiConfig};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn approx_eq(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-9
@@ -427,7 +430,88 @@ action = "ghostty"
     #[test]
     fn invalid_toml_is_rejected() {
         let invalid = "[ui\nwidth = 100";
-        let parsed = toml::from_str::<Config>(invalid);
+        let parsed = parse_config_str(invalid);
         assert!(parsed.is_err());
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time moved backwards")
+            .as_nanos();
+        std::env::temp_dir().join(format!("waypie-{prefix}-{nanos}"))
+    }
+
+    #[test]
+    fn load_from_missing_path_creates_default_file() {
+        let test_dir = unique_temp_dir("missing");
+        let path = test_dir.join("config.toml");
+
+        let cfg = load_config_from_path(&path);
+
+        assert_eq!(cfg, Config::default());
+        assert!(path.exists());
+
+        let file_content = fs::read_to_string(&path).unwrap();
+        assert!(file_content.contains("[ui]"));
+        assert!(file_content.contains("[[menu]]"));
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn load_from_invalid_toml_falls_back_to_default() {
+        let test_dir = unique_temp_dir("invalid");
+        let path = test_dir.join("config.toml");
+        fs::create_dir_all(&test_dir).unwrap();
+        fs::write(&path, "[ui\nwidth = 100").unwrap();
+
+        let cfg = load_config_from_path(&path);
+
+        assert_eq!(cfg, Config::default());
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn load_with_unwritable_parent_returns_default_without_panic() {
+        let test_dir = unique_temp_dir("writefail");
+        fs::create_dir_all(&test_dir).unwrap();
+        let not_a_dir = test_dir.join("not_a_dir");
+        fs::write(&not_a_dir, "block parent dir creation").unwrap();
+        let path = not_a_dir.join("config.toml");
+
+        let cfg = load_config_from_path(&path);
+
+        assert_eq!(cfg, Config::default());
+        assert!(!path.exists());
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn reload_config_reports_parse_error() {
+        let test_dir = unique_temp_dir("reload-parse");
+        let path = test_dir.join("config.toml");
+        fs::create_dir_all(&test_dir).unwrap();
+        fs::write(&path, "[ui\nwidth = 100").unwrap();
+
+        let result = reload_config_from_path(&path);
+
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Parse Error"));
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn reload_config_reports_read_error() {
+        let test_dir = unique_temp_dir("reload-read");
+        let path = test_dir.join("missing.toml");
+
+        let result = reload_config_from_path(&path);
+
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Read Error"));
     }
 }
