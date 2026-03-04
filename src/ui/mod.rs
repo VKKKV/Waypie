@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod click_logic;
 pub mod hover_state;
 pub mod menu_model;
 pub mod radial;
