@@ -10,6 +10,11 @@ pub use crate::ui::menu_model::{Action, PieItem};
 
 use super::radial_imp;
 
+const HOVER_ACTIVATION_DELAY_MS: u64 = 100;
+const ANIMATION_TICK_MS: u64 = 16;
+const ANIMATION_EPSILON: f64 = 0.001;
+const ANIMATION_LERP_SPEED: f64 = 0.2;
+
 glib::wrapper! {
     pub struct RadialMenu(ObjectSubclass<radial_imp::RadialMenu>)
         @extends gtk4::Widget;
@@ -43,10 +48,7 @@ impl RadialMenu {
 
     pub fn handle_motion(&self, x: f64, y: f64) {
         let imp = self.imp();
-        let w = self.width() as f64;
-        let h = self.height() as f64;
-        let cx = w / 2.0;
-        let cy = h / 2.0;
+        let (cx, cy) = self.widget_center();
 
         let (dist, angle_deg) = crate::utils::cartesian_to_polar(x, y, cx, cy);
         let items = imp.items.borrow();
@@ -167,8 +169,9 @@ impl RadialMenu {
         self.clear_hover_timeout();
 
         let weak_self = self.downgrade();
-        let source_id =
-            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+        let source_id = gtk4::glib::timeout_add_local(
+            std::time::Duration::from_millis(HOVER_ACTIVATION_DELAY_MS),
+            move || {
                 if let Some(menu) = weak_self.upgrade() {
                     let imp = menu.imp();
 
@@ -186,7 +189,8 @@ impl RadialMenu {
                 }
 
                 gtk4::glib::ControlFlow::Break
-            });
+            },
+        );
 
         self.imp().hover_timeout_id.replace(Some(source_id));
     }
@@ -200,7 +204,7 @@ impl RadialMenu {
         }
 
         let current = imp.outer_ring_progress.get();
-        if (target - current).abs() < 0.001 {
+        if (target - current).abs() < ANIMATION_EPSILON {
             if current != target {
                 imp.outer_ring_progress.set(target);
                 self.queue_draw();
@@ -209,14 +213,15 @@ impl RadialMenu {
         }
 
         let weak_self = self.downgrade();
-        let source_id =
-            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+        let source_id = gtk4::glib::timeout_add_local(
+            std::time::Duration::from_millis(ANIMATION_TICK_MS),
+            move || {
                 if let Some(menu) = weak_self.upgrade() {
                     let imp = menu.imp();
                     let current = imp.outer_ring_progress.get();
                     let target = imp.target_progress.get();
 
-                    if (target - current).abs() < 0.001 {
+                    if (target - current).abs() < ANIMATION_EPSILON {
                         if current != target {
                             imp.outer_ring_progress.set(target);
                             menu.queue_draw();
@@ -225,7 +230,7 @@ impl RadialMenu {
                         return gtk4::glib::ControlFlow::Break;
                     }
 
-                    let next = current + (target - current) * 0.2;
+                    let next = current + (target - current) * ANIMATION_LERP_SPEED;
                     imp.outer_ring_progress.set(next);
                     menu.queue_draw();
 
@@ -233,7 +238,8 @@ impl RadialMenu {
                 }
 
                 gtk4::glib::ControlFlow::Break
-            });
+            },
+        );
 
         imp.animation_timeout_id.replace(Some(source_id));
     }
@@ -345,10 +351,7 @@ impl RadialMenu {
 
     pub fn handle_click(&self, gesture: &GestureClick, _n_press: i32, x: f64, y: f64) {
         let imp = self.imp();
-        let w = self.width() as f64;
-        let h = self.height() as f64;
-        let cx = w / 2.0;
-        let cy = h / 2.0;
+        let (cx, cy) = self.widget_center();
 
         let (dist, _) = crate::utils::cartesian_to_polar(x, y, cx, cy);
         let button = gesture.current_button();
@@ -361,6 +364,10 @@ impl RadialMenu {
         if let Some(action) = self.resolve_clicked_action(button) {
             self.dispatch_action(action, x, y);
         }
+    }
+
+    fn widget_center(&self) -> (f64, f64) {
+        (self.width() as f64 / 2.0, self.height() as f64 / 2.0)
     }
 }
 
