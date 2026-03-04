@@ -1,7 +1,7 @@
 /// Menu data model - defines Action and PieItem types
 /// This module contains pure data structures with no dependencies on UI or async runtime
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     Command(String),
     Activate {
@@ -22,7 +22,7 @@ pub enum Action {
     None,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PieItem {
     pub label: String,
     pub icon: String,

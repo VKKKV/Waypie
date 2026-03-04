@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 
 // 1. Data Structures
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Config {
     #[serde(default)]
     pub ui: UiConfig,
@@ -24,7 +24,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct UiConfig {
     #[serde(default = "default_width")]
     pub width: i32,
@@ -41,7 +41,7 @@ pub struct UiConfig {
     pub colors: ColorsConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct ColorsConfig {
     #[serde(
         default = "default_center_color",
@@ -234,7 +234,7 @@ fn default_menu_items() -> Vec<MenuItemConfig> {
     ]
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct MenuItemConfig {
     pub label: String,
     #[serde(default)]
@@ -362,7 +362,10 @@ action = "ghostty"
 
         assert_eq!(cfg.ui.width, 720);
         assert_eq!(cfg.ui.height, UiConfig::default().height);
-        assert!(approx_eq(cfg.ui.center_radius, UiConfig::default().center_radius));
+        assert!(approx_eq(
+            cfg.ui.center_radius,
+            UiConfig::default().center_radius
+        ));
         assert_eq!(cfg.menu.len(), 1);
         assert_eq!(cfg.menu[0].label, "Terminal");
         assert_eq!(cfg.menu[0].item_type, None);

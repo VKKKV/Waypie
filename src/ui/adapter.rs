@@ -1,6 +1,6 @@
 use crate::config::MenuItemConfig;
-use crate::ui::menu_model::{PieItem, Action};
 use crate::tray::TrayItem;
+use crate::ui::menu_model::{Action, PieItem};
 
 /// Parse a string action from config into an Action enum
 fn parse_action_string(s: String) -> Action {
@@ -9,30 +9,36 @@ fn parse_action_string(s: String) -> Action {
     }
 
     if let Some(rest) = s.strip_prefix("activate|") {
-        let parts: Vec<&str> = rest.splitn(3, '|').collect();
-        if parts.len() == 3 {
+        let mut parts = rest.splitn(3, '|');
+        if let (Some(service), Some(path), Some(menu_path)) =
+            (parts.next(), parts.next(), parts.next())
+        {
             return Action::Activate {
-                service: parts[0].to_string(),
-                path: parts[1].to_string(),
-                menu_path: parts[2].to_string(),
+                service: service.to_string(),
+                path: path.to_string(),
+                menu_path: menu_path.to_string(),
             };
         }
     } else if let Some(rest) = s.strip_prefix("context|") {
-        let parts: Vec<&str> = rest.splitn(3, '|').collect();
-        if parts.len() == 3 {
+        let mut parts = rest.splitn(3, '|');
+        if let (Some(service), Some(path), Some(menu_path)) =
+            (parts.next(), parts.next(), parts.next())
+        {
             return Action::Context {
-                service: parts[0].to_string(),
-                path: parts[1].to_string(),
-                menu_path: parts[2].to_string(),
+                service: service.to_string(),
+                path: path.to_string(),
+                menu_path: menu_path.to_string(),
             };
         }
     } else if let Some(rest) = s.strip_prefix("dbus_signal|") {
-        let parts: Vec<&str> = rest.splitn(3, '|').collect();
-        if parts.len() == 3 {
-            if let Ok(id) = parts[2].parse::<i32>() {
+        let mut parts = rest.splitn(3, '|');
+        if let (Some(service), Some(path), Some(id_part)) =
+            (parts.next(), parts.next(), parts.next())
+        {
+            if let Ok(id) = id_part.parse::<i32>() {
                 return Action::DbusSignal {
-                    service: parts[0].to_string(),
-                    path: parts[1].to_string(),
+                    service: service.to_string(),
+                    path: path.to_string(),
                     id,
                 };
             }
@@ -47,7 +53,7 @@ pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> 
         .iter()
         .map(|item| {
             if item.item_type.as_deref() == Some("tray") {
-                let mut tray_children = Vec::new();
+                let mut tray_children = Vec::with_capacity(tray_items.len().max(1));
 
                 if tray_items.is_empty() {
                     tray_children.push(PieItem {

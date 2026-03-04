@@ -1,9 +1,9 @@
-pub mod window;
+pub mod adapter;
+pub mod hover_state;
+pub mod menu_model;
 pub mod radial;
 pub mod radial_imp;
-pub mod adapter;
-pub mod menu_model;
-pub mod hover_state;
+pub mod window;
 
 use gtk4::prelude::*;
 use gtk4::Application;
@@ -12,8 +12,8 @@ use std::sync::{Arc, RwLock};
 use crate::config;
 use crate::tray::SNIWatcher;
 
-pub use radial::RadialMenu;
 pub use adapter::convert_menu_items;
+pub use radial::RadialMenu;
 
 pub fn build_ui(app: &Application) {
     // 1. Load Initial Config
@@ -92,8 +92,13 @@ pub fn build_ui(app: &Application) {
                             Vec::new()
                         };
                         let new_items = convert_menu_items(&cfg.menu, &current_tray_items);
-                        menu.set_items(new_items);
-                        menu.set_ui_config(cfg.ui.clone());
+                        if !menu.items_equal(&new_items) {
+                            menu.set_items(new_items);
+                        }
+
+                        if !menu.ui_config_equal(&cfg.ui) {
+                            menu.set_ui_config(cfg.ui.clone());
+                        }
                     }
                 }
             }

@@ -33,6 +33,14 @@ impl RadialMenu {
         self.queue_draw();
     }
 
+    pub fn items_equal(&self, other: &[PieItem]) -> bool {
+        self.imp().items.borrow().as_slice() == other
+    }
+
+    pub fn ui_config_equal(&self, other: &crate::config::UiConfig) -> bool {
+        *self.imp().ui_config.borrow() == *other
+    }
+
     pub fn handle_motion(&self, x: f64, y: f64) {
         let imp = self.imp();
         let w = self.width() as f64;
