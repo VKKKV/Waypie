@@ -2,7 +2,7 @@ use crate::color::{self, ColorRGB, ColorRGBA};
 use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 
@@ -248,34 +248,62 @@ pub struct MenuItemConfig {
 }
 
 // 2. Loading Logic
-pub fn load_config() -> Config {
-    let path = crate::utils::get_config_path();
-    if let Some(p) = &path {
-        if p.exists() {
-            match fs::read_to_string(p) {
-                Ok(content) => match toml::from_str(&content) {
-                    Ok(cfg) => return cfg,
-                    Err(e) => {
-                        eprintln!("Error parsing config at {:?}: {}", p, e);
-                        eprintln!("Falling back to default config.");
-                    }
-                },
-                Err(e) => eprintln!("Error reading config file: {}", e),
-            }
-        } else {
-            println!("Config not found. Creating default at {:?}", p);
-            if let Some(parent) = p.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            let default_cfg = Config::default();
-            if let Ok(toml_string) = toml::to_string_pretty(&default_cfg) {
-                if let Err(e) = fs::write(p, toml_string) {
-                    eprintln!("Failed to write default config: {}", e);
-                }
-            }
-            return default_cfg;
+fn parse_config_str(content: &str) -> Result<Config, toml::de::Error> {
+    toml::from_str(content)
+}
+
+fn write_default_config(path: &Path, default_cfg: &Config) {
+    if let Some(parent) = path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("Failed to create config directory: {}", e);
+            return;
         }
     }
+
+    match toml::to_string_pretty(default_cfg) {
+        Ok(toml_string) => {
+            if let Err(e) = fs::write(path, toml_string) {
+                eprintln!("Failed to write default config: {}", e);
+            }
+        }
+        Err(e) => eprintln!("Failed to serialize default config: {}", e),
+    }
+}
+
+fn load_config_from_path(path: &Path) -> Config {
+    if path.exists() {
+        match fs::read_to_string(path) {
+            Ok(content) => match parse_config_str(&content) {
+                Ok(cfg) => cfg,
+                Err(e) => {
+                    eprintln!("Error parsing config at {:?}: {}", path, e);
+                    eprintln!("Falling back to default config.");
+                    Config::default()
+                }
+            },
+            Err(e) => {
+                eprintln!("Error reading config file: {}", e);
+                Config::default()
+            }
+        }
+    } else {
+        println!("Config not found. Creating default at {:?}", path);
+        let default_cfg = Config::default();
+        write_default_config(path, &default_cfg);
+        default_cfg
+    }
+}
+
+fn reload_config_from_path(path: &Path) -> Result<Config, String> {
+    let content = fs::read_to_string(path).map_err(|e| format!("Read Error: {}", e))?;
+    parse_config_str(&content).map_err(|e| format!("Parse Error: {}", e))
+}
+
+pub fn load_config() -> Config {
+    if let Some(path) = crate::utils::get_config_path() {
+        return load_config_from_path(&path);
+    }
+
     Config::default()
 }
 
@@ -307,18 +335,15 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
                     println!("Config file changed. Reloading...");
                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-                    match fs::read_to_string(&path) {
-                        Ok(content) => match toml::from_str::<Config>(&content) {
-                            Ok(new_config) => {
-                                if let Ok(mut w) = config_store.write() {
-                                    *w = new_config;
-                                }
-                                let _ = sender.try_send(());
-                                println!("Config reloaded successfully.");
+                    match reload_config_from_path(&path) {
+                        Ok(new_config) => {
+                            if let Ok(mut w) = config_store.write() {
+                                *w = new_config;
                             }
-                            Err(e) => eprintln!("Config reload failed (Parse Error): {}", e),
-                        },
-                        Err(e) => eprintln!("Config reload failed (Read Error): {}", e),
+                            let _ = sender.try_send(());
+                            println!("Config reloaded successfully.");
+                        }
+                        Err(e) => eprintln!("Config reload failed ({}).", e),
                     }
                 }
             }
