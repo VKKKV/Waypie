@@ -218,4 +218,22 @@ mod tests {
         assert_eq!(transition.next_hover_child_idx, Some(2));
         assert!(!transition.clear_hover_timeout);
     }
+
+    #[test]
+    fn transition_does_not_reschedule_same_inner_parent() {
+        let transition =
+            compute_hover_transition(HoverZone::InnerRing, 95.0, 4, None, Some(1), None, 0);
+
+        assert_eq!(transition.next_hover_parent_idx, Some(1));
+        assert_eq!(transition.schedule_hover_activation_idx, None);
+    }
+
+    #[test]
+    fn transition_clears_parent_on_outer_without_active_parent() {
+        let transition =
+            compute_hover_transition(HoverZone::OuterRing, 95.0, 4, None, Some(1), None, 0);
+
+        assert_eq!(transition.next_hover_parent_idx, None);
+        assert!(transition.clear_hover_timeout);
+    }
 }

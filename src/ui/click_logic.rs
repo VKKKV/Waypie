@@ -153,4 +153,39 @@ mod tests {
 
         assert_eq!(action, Some(Action::Command("parent-cmd".to_string())));
     }
+
+    #[test]
+    fn resolve_clicked_action_ignores_parent_with_children() {
+        let parent = PieItem {
+            label: "parent".to_string(),
+            icon: "icon".to_string(),
+            action: Action::Command("parent-cmd".to_string()),
+            children: vec![child_with_action(
+                Action::Command("child".to_string()),
+                None,
+            )],
+            item_type: None,
+            tray_id: None,
+        };
+
+        let action =
+            resolve_clicked_action(&[parent], None, None, Some(0), gtk4::gdk::BUTTON_PRIMARY);
+
+        assert_eq!(action, None);
+    }
+
+    #[test]
+    fn resolve_clicked_action_returns_none_for_invalid_indices() {
+        let parent = child_with_action(Action::Command("parent".to_string()), None);
+
+        let action = resolve_clicked_action(
+            &[parent],
+            Some(2),
+            Some(0),
+            Some(9),
+            gtk4::gdk::BUTTON_PRIMARY,
+        );
+
+        assert_eq!(action, None);
+    }
 }
