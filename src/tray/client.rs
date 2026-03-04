@@ -1,5 +1,5 @@
-use system_tray::menu::{MenuItem, MenuType, TrayMenu};
 use system_tray::client::ActivateRequest;
+use system_tray::menu::{MenuItem, MenuType, TrayMenu};
 
 use crate::ui::menu_model::{Action, PieItem};
 
@@ -30,31 +30,15 @@ pub async fn activate_or_popup(
         return false;
     };
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
-
-    crate::RUNTIME
-        .get()
-        .expect("Runtime not initialized")
-        .spawn(async move {
-            let result = async {
-                if let Some(client) = client {
-                    let req = ActivateRequest::Default {
-                        address: service,
-                        x: x_int,
-                        y: y_int,
-                    };
-                    return client.activate(req).await.map_err(|e| e.to_string());
-                }
-                Err("Waypie: Client not initialized".to_string())
-            }
-            .await;
-
-            let _ = tx.send(result);
-        });
-
-    let activate_result = match rx.await {
-        Ok(res) => res,
-        Err(_) => Err("Tokio task cancelled".to_string()),
+    let activate_result = if let Some(client) = client {
+        let req = ActivateRequest::Default {
+            address: service,
+            x: x_int,
+            y: y_int,
+        };
+        client.activate(req).await.map_err(|e| e.to_string())
+    } else {
+        Err("Waypie: Client not initialized".to_string())
     };
 
     println!(
@@ -80,7 +64,7 @@ pub fn convert_menu_item_to_pie(item: &MenuItem, service: &str, path: &str) -> O
         .as_ref()
         .cloned()
         .unwrap_or_default()
-        .replace("_", "");
+        .replace('_', "");
     if label.is_empty() && item.submenu.is_empty() {
         return None;
     }
@@ -96,7 +80,7 @@ pub fn convert_menu_item_to_pie(item: &MenuItem, service: &str, path: &str) -> O
         id: item.id,
     };
 
-    let mut children = Vec::new();
+    let mut children = Vec::with_capacity(item.submenu.len());
     for child in &item.submenu {
         if let Some(pie_child) = convert_menu_item_to_pie(child, service, path) {
             children.push(pie_child);
@@ -114,7 +98,7 @@ pub fn convert_menu_item_to_pie(item: &MenuItem, service: &str, path: &str) -> O
 }
 
 pub fn convert_tray_menu_to_pie(menu: &TrayMenu, service: &str, path: &str) -> Vec<PieItem> {
-    let mut items = Vec::new();
+    let mut items = Vec::with_capacity(menu.submenus.len());
     for item in &menu.submenus {
         if let Some(pie_item) = convert_menu_item_to_pie(item, service, path) {
             items.push(pie_item);
@@ -136,25 +120,20 @@ pub async fn fetch_dbus_menu_as_pie(name: String, path: String) -> Result<Vec<Pi
         return Err("Waypie: [Error] AppState not initialized".to_string());
     };
 
-    let s = service.clone();
-    let p = path.clone();
+    let _ = client
+        .about_to_show_menuitem(service.clone(), path.clone(), 0)
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    // Call AboutToShow on runtime
-    let handle = crate::RUNTIME
-        .get()
-        .expect("Runtime not initialized")
-        .spawn(async move {
-            let _ = client.about_to_show_menuitem(s, p, 0).await;
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        });
-
-    let _ = handle.await;
-
-    if let Some(state) = crate::APP_STATE.get() {
+    let menu = if let Some(state) = crate::APP_STATE.get() {
         let store = state.items.lock().unwrap();
-        if let Some((_, Some(menu))) = store.get(&name) {
-            return Ok(convert_tray_menu_to_pie(menu, &service, &path));
-        }
+        store.get(&name).and_then(|(_, menu)| menu.clone())
+    } else {
+        None
+    };
+
+    if let Some(menu) = menu {
+        return Ok(convert_tray_menu_to_pie(&menu, &service, &path));
     }
 
     Err(format!(
