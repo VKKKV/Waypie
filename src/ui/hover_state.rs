@@ -22,11 +22,20 @@ pub fn calculate_hovered_item(angle: f64, item_count: usize) -> Option<usize> {
 }
 
 /// Determine hover state based on distance and angle
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HoverZone {
     Center,
     InnerRing,
     OuterRing,
     Outside,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HoverTransition {
+    pub next_hover_parent_idx: Option<usize>,
+    pub next_hover_child_idx: Option<usize>,
+    pub schedule_hover_activation_idx: Option<usize>,
+    pub clear_hover_timeout: bool,
 }
 
 pub fn get_hover_zone(
@@ -51,10 +60,61 @@ pub fn get_child_count(items: &[PieItem], parent_idx: usize) -> usize {
     items.get(parent_idx).map(|p| p.children.len()).unwrap_or(0)
 }
 
+pub fn compute_hover_transition(
+    zone: HoverZone,
+    norm_angle: f64,
+    parent_count: usize,
+    active_parent_idx: Option<usize>,
+    current_hover_parent_idx: Option<usize>,
+    current_hover_child_idx: Option<usize>,
+    active_child_count: usize,
+) -> HoverTransition {
+    let mut next_hover_parent_idx = current_hover_parent_idx;
+    let mut next_hover_child_idx = None;
+    let mut schedule_hover_activation_idx = None;
+    let mut clear_hover_timeout = false;
+
+    match zone {
+        HoverZone::Center | HoverZone::Outside => {
+            if current_hover_parent_idx.is_some() {
+                next_hover_parent_idx = None;
+                clear_hover_timeout = true;
+            }
+        }
+        HoverZone::InnerRing => {
+            if let Some(idx) = calculate_hovered_item(norm_angle, parent_count) {
+                if current_hover_parent_idx != Some(idx) {
+                    next_hover_parent_idx = Some(idx);
+                    schedule_hover_activation_idx = Some(idx);
+                }
+            }
+        }
+        HoverZone::OuterRing => {
+            if active_parent_idx.is_some() {
+                if active_child_count > 0 {
+                    next_hover_child_idx = calculate_hovered_item(norm_angle, active_child_count)
+                        .or(current_hover_child_idx);
+                }
+            } else if current_hover_parent_idx.is_some() {
+                next_hover_parent_idx = None;
+                clear_hover_timeout = true;
+            }
+        }
+    }
+
+    HoverTransition {
+        next_hover_parent_idx,
+        next_hover_child_idx,
+        schedule_hover_activation_idx,
+        clear_hover_timeout,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        calculate_hovered_item, get_child_count, get_hover_zone, normalize_angle, HoverZone,
+        calculate_hovered_item, compute_hover_transition, get_child_count, get_hover_zone,
+        normalize_angle, HoverTransition, HoverZone,
     };
     use crate::ui::menu_model::{Action, PieItem};
 
@@ -123,5 +183,39 @@ mod tests {
 
         assert_eq!(get_child_count(&items, 0), 1);
         assert_eq!(get_child_count(&items, 1), 0);
+    }
+
+    #[test]
+    fn transition_clears_parent_on_outside() {
+        let transition =
+            compute_hover_transition(HoverZone::Outside, 10.0, 4, None, Some(1), Some(0), 0);
+
+        assert_eq!(
+            transition,
+            HoverTransition {
+                next_hover_parent_idx: None,
+                next_hover_child_idx: None,
+                schedule_hover_activation_idx: None,
+                clear_hover_timeout: true,
+            }
+        );
+    }
+
+    #[test]
+    fn transition_schedules_inner_parent_activation() {
+        let transition =
+            compute_hover_transition(HoverZone::InnerRing, 91.0, 4, None, None, None, 0);
+
+        assert_eq!(transition.next_hover_parent_idx, Some(1));
+        assert_eq!(transition.schedule_hover_activation_idx, Some(1));
+    }
+
+    #[test]
+    fn transition_tracks_outer_child_when_active_parent_exists() {
+        let transition =
+            compute_hover_transition(HoverZone::OuterRing, 180.0, 4, Some(0), Some(0), None, 4);
+
+        assert_eq!(transition.next_hover_child_idx, Some(2));
+        assert!(!transition.clear_hover_timeout);
     }
 }

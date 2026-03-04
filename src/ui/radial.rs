@@ -5,7 +5,7 @@ use gtk4::GestureClick;
 
 use crate::ui::click_logic::resolve_clicked_action;
 use crate::ui::hover_state::{
-    calculate_hovered_item, get_child_count, get_hover_zone, normalize_angle, HoverZone,
+    compute_hover_transition, get_child_count, get_hover_zone, normalize_angle,
 };
 pub use crate::ui::menu_model::{Action, PieItem};
 
@@ -59,32 +59,39 @@ impl RadialMenu {
             return;
         }
 
-        let mut should_redraw = false;
-        let mut keep_hover_child = false;
         let ui = imp.ui_config.borrow();
         let norm_angle = normalize_angle(angle_deg);
+        let active_parent_idx = imp.active_parent_idx.get();
+        let active_child_count = active_parent_idx
+            .map(|idx| get_child_count(&items, idx))
+            .unwrap_or(0);
 
-        match get_hover_zone(dist, ui.center_radius, ui.inner_radius, ui.outer_radius) {
-            HoverZone::Center => {
-                should_redraw |= self.clear_hover_parent();
-            }
-            HoverZone::InnerRing => {
-                if let Some(idx) = calculate_hovered_item(norm_angle, parent_count) {
-                    should_redraw |= self.set_hover_parent(idx);
-                }
-            }
-            HoverZone::OuterRing => {
-                let (outer_redraw, keep_child) = self.update_outer_ring_hover(norm_angle, &items);
-                should_redraw |= outer_redraw;
-                keep_hover_child = keep_child;
-            }
-            HoverZone::Outside => {
-                should_redraw |= self.clear_hover_parent();
-            }
+        let transition = compute_hover_transition(
+            get_hover_zone(dist, ui.center_radius, ui.inner_radius, ui.outer_radius),
+            norm_angle,
+            parent_count,
+            active_parent_idx,
+            imp.hover_parent_idx.get(),
+            imp.hover_child_idx.get(),
+            active_child_count,
+        );
+
+        let mut should_redraw = false;
+
+        if transition.clear_hover_timeout {
+            self.clear_hover_timeout();
         }
-
-        if !keep_hover_child {
-            should_redraw |= self.clear_hover_child();
+        if imp.hover_parent_idx.get() != transition.next_hover_parent_idx {
+            imp.hover_parent_idx.set(transition.next_hover_parent_idx);
+            should_redraw = true;
+        }
+        if imp.hover_child_idx.get() != transition.next_hover_child_idx {
+            imp.hover_child_idx.set(transition.next_hover_child_idx);
+            should_redraw = true;
+        }
+        if let Some(idx) = transition.schedule_hover_activation_idx {
+            self.schedule_hover_activation(idx);
+            should_redraw = true;
         }
 
         if should_redraw {
@@ -106,64 +113,6 @@ impl RadialMenu {
         if let Some(source_id) = self.imp().hover_timeout_id.borrow_mut().take() {
             source_id.remove();
         }
-    }
-
-    fn clear_hover_parent(&self) -> bool {
-        let imp = self.imp();
-        if imp.hover_parent_idx.get().is_some() {
-            imp.hover_parent_idx.set(None);
-            self.clear_hover_timeout();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn set_hover_parent(&self, idx: usize) -> bool {
-        let imp = self.imp();
-        if imp.hover_parent_idx.get() != Some(idx) {
-            imp.hover_parent_idx.set(Some(idx));
-            self.schedule_hover_activation(idx);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn clear_hover_child(&self) -> bool {
-        let imp = self.imp();
-        if imp.hover_child_idx.get().is_some() {
-            imp.hover_child_idx.set(None);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn set_hover_child(&self, idx: usize) -> bool {
-        let imp = self.imp();
-        if imp.hover_child_idx.get() != Some(idx) {
-            imp.hover_child_idx.set(Some(idx));
-            true
-        } else {
-            false
-        }
-    }
-
-    fn update_outer_ring_hover(&self, norm_angle: f64, items: &[PieItem]) -> (bool, bool) {
-        let imp = self.imp();
-
-        if let Some(active_idx) = imp.active_parent_idx.get() {
-            let child_count = get_child_count(items, active_idx);
-            if child_count > 0 {
-                if let Some(idx) = calculate_hovered_item(norm_angle, child_count) {
-                    return (self.set_hover_child(idx), true);
-                }
-            }
-            return (false, false);
-        }
-
-        (self.clear_hover_parent(), false)
     }
 
     fn schedule_hover_activation(&self, hover_idx: usize) {
