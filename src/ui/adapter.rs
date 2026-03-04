@@ -3,7 +3,7 @@ use crate::tray::TrayItem;
 use crate::ui::menu_model::{Action, PieItem};
 
 /// Parse a string action from config into an Action enum
-fn parse_action_string(s: String) -> Action {
+fn parse_action_string(s: &str) -> Action {
     if s.is_empty() {
         return Action::None;
     }
@@ -45,7 +45,7 @@ fn parse_action_string(s: String) -> Action {
         }
     }
 
-    Action::Command(s)
+    Action::Command(s.to_string())
 }
 
 pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> Vec<PieItem> {
@@ -98,7 +98,7 @@ pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> 
                 PieItem {
                     label: item.label.clone(),
                     icon: item.icon.clone(),
-                    action: parse_action_string(item.action.clone()),
+                    action: parse_action_string(&item.action),
                     children: tray_children,
                     item_type: item.item_type.clone(),
                     tray_id: None,
@@ -107,7 +107,7 @@ pub fn convert_menu_items(items: &[MenuItemConfig], tray_items: &[TrayItem]) -> 
                 PieItem {
                     label: item.label.clone(),
                     icon: item.icon.clone(),
-                    action: parse_action_string(item.action.clone()),
+                    action: parse_action_string(&item.action),
                     children: convert_menu_items(&item.children, tray_items),
                     item_type: item.item_type.clone(),
                     tray_id: None,

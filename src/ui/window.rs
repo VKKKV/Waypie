@@ -1,6 +1,6 @@
+use crate::config::UiConfig;
 use gtk4::{Application, ApplicationWindow, CssProvider};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
-use crate::config::UiConfig;
 
 pub fn build_window(app: &Application, config: &UiConfig) -> ApplicationWindow {
     let window = ApplicationWindow::builder()
@@ -22,7 +22,7 @@ pub fn build_window(app: &Application, config: &UiConfig) -> ApplicationWindow {
     let provider = CssProvider::new();
     provider.load_from_data("window { background-color: transparent; }");
     gtk4::style_context_add_provider_for_display(
-        &gtk4::gdk::Display::default().expect("No display"),
+        &gtk4::prelude::WidgetExt::display(&window),
         &provider,
         gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
