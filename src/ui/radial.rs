@@ -269,73 +269,77 @@ impl RadialMenu {
                 service,
                 path,
                 menu_path,
-            } => {
-                gtk4::glib::spawn_future_local(async move {
-                    let success =
-                        crate::tray::activate_or_popup(service, path, menu_path, x, y).await;
-
-                    if success {
-                        std::process::exit(0);
-                    }
-                });
-            }
+            } => self.dispatch_activate(service, path, menu_path, x, y),
             Action::Context {
                 service, menu_path, ..
-            } => {
-                let self_clone = self.clone();
-                gtk4::glib::spawn_future_local(async move {
-                    match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
-                        Ok(items) => {
-                            println!("Waypie: Context menu fetched with {} items", items.len());
-                            self_clone.set_items(items);
-                        }
-                        Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
-                    }
-                });
-            }
+            } => self.dispatch_context(service, menu_path),
             Action::DbusSignal { service, path, id } => {
-                crate::RUNTIME
-                    .get()
-                    .expect("Runtime not initialized")
-                    .spawn(async move {
-                        match zbus::Connection::session().await {
-                            Ok(conn) => {
-                                let result = conn
-                                    .call_method(
-                                        Some(service.as_str()),
-                                        path.as_str(),
-                                        Some("com.canonical.dbusmenu"),
-                                        "Event",
-                                        &(
-                                            id,
-                                            "clicked",
-                                            zbus::zvariant::Value::Str("".into()),
-                                            0u32,
-                                        ),
-                                    )
-                                    .await;
-
-                                match result {
-                                    Ok(_) => std::process::exit(0),
-                                    Err(e) => eprintln!("Waypie: DBus Event failed: {}", e),
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("Waypie: Failed to connect to session bus: {}", e)
-                            }
-                        }
-                    });
+                self.dispatch_dbus_signal(service, path, id)
             }
-            Action::Command(cmd) => {
-                if !cmd.is_empty() {
-                    if let Err(e) = crate::utils::spawn_app(&cmd) {
-                        eprintln!("Waypie: Failed to execute command '{}': {}", cmd, e);
-                    } else {
-                        std::process::exit(0);
+            Action::Command(cmd) => self.dispatch_command(cmd),
+            Action::None => {}
+        }
+    }
+
+    fn dispatch_activate(&self, service: String, path: String, menu_path: String, x: f64, y: f64) {
+        gtk4::glib::spawn_future_local(async move {
+            let success = crate::tray::activate_or_popup(service, path, menu_path, x, y).await;
+
+            if success {
+                std::process::exit(0);
+            }
+        });
+    }
+
+    fn dispatch_context(&self, service: String, menu_path: String) {
+        let self_clone = self.clone();
+        gtk4::glib::spawn_future_local(async move {
+            match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
+                Ok(items) => {
+                    println!("Waypie: Context menu fetched with {} items", items.len());
+                    self_clone.set_items(items);
+                }
+                Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
+            }
+        });
+    }
+
+    fn dispatch_dbus_signal(&self, service: String, path: String, id: i32) {
+        crate::RUNTIME
+            .get()
+            .expect("Runtime not initialized")
+            .spawn(async move {
+                match zbus::Connection::session().await {
+                    Ok(conn) => {
+                        let result = conn
+                            .call_method(
+                                Some(service.as_str()),
+                                path.as_str(),
+                                Some("com.canonical.dbusmenu"),
+                                "Event",
+                                &(id, "clicked", zbus::zvariant::Value::Str("".into()), 0u32),
+                            )
+                            .await;
+
+                        match result {
+                            Ok(_) => std::process::exit(0),
+                            Err(e) => eprintln!("Waypie: DBus Event failed: {}", e),
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Waypie: Failed to connect to session bus: {}", e)
                     }
                 }
+            });
+    }
+
+    fn dispatch_command(&self, cmd: String) {
+        if !cmd.is_empty() {
+            if let Err(e) = crate::utils::spawn_app(&cmd) {
+                eprintln!("Waypie: Failed to execute command '{}': {}", cmd, e);
+            } else {
+                std::process::exit(0);
             }
-            Action::None => {}
         }
     }
 
