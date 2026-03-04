@@ -326,3 +326,80 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, UiConfig};
+
+    fn approx_eq(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    #[test]
+    fn default_config_has_expected_ui_values() {
+        let cfg = Config::default();
+
+        assert_eq!(cfg.ui.width, 600);
+        assert_eq!(cfg.ui.height, 600);
+        assert!(approx_eq(cfg.ui.center_radius, 100.0));
+        assert!(approx_eq(cfg.ui.inner_radius, 250.0));
+        assert!(approx_eq(cfg.ui.outer_radius, 400.0));
+        assert!(!cfg.menu.is_empty());
+    }
+
+    #[test]
+    fn deserializing_partial_config_applies_defaults() {
+        let toml_input = r#"
+[ui]
+width = 720
+
+[[menu]]
+label = "Terminal"
+action = "ghostty"
+"#;
+
+        let cfg: Config = toml::from_str(toml_input).unwrap();
+
+        assert_eq!(cfg.ui.width, 720);
+        assert_eq!(cfg.ui.height, UiConfig::default().height);
+        assert!(approx_eq(cfg.ui.center_radius, UiConfig::default().center_radius));
+        assert_eq!(cfg.menu.len(), 1);
+        assert_eq!(cfg.menu[0].label, "Terminal");
+        assert_eq!(cfg.menu[0].item_type, None);
+    }
+
+    #[test]
+    fn deserializing_type_field_maps_to_item_type() {
+        let toml_input = r#"
+[[menu]]
+label = "Tray"
+type = "tray"
+"#;
+
+        let cfg: Config = toml::from_str(toml_input).unwrap();
+        assert_eq!(cfg.menu.len(), 1);
+        assert_eq!(cfg.menu[0].item_type.as_deref(), Some("tray"));
+    }
+
+    #[test]
+    fn invalid_color_in_config_is_rejected() {
+        let toml_input = r##"
+[ui.colors]
+center_color = "#12"
+
+[[menu]]
+label = "Terminal"
+action = "ghostty"
+"##;
+
+        let parsed = toml::from_str::<Config>(toml_input);
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn invalid_toml_is_rejected() {
+        let invalid = "[ui\nwidth = 100";
+        let parsed = toml::from_str::<Config>(invalid);
+        assert!(parsed.is_err());
+    }
+}
