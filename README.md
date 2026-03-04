@@ -113,3 +113,28 @@ Ensure you have the following installed:
 - **Optimized Hover Detection:** Refactored angle normalization and item calculation into reusable helper functions, reducing code duplication by ~35%.
 - **System-Tray Integration:** Replaced low-level zbus calls with higher-level `system-tray` crate's `ActivateRequest` API for cleaner, more maintainable tray activation.
 
+### Development Workflow
+
+From the repository root:
+
+```bash
+cargo check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+```
+
+Useful targeted test runs:
+
+```bash
+cargo test ui::click_logic
+cargo test ui::hover_state
+cargo test config::tests::
+```
+
+Debug instrumentation:
+
+```bash
+WAYPIE_DEBUG=1 cargo run --release
+```
+
+With `WAYPIE_DEBUG=1`, Waypie logs lightweight counters for UI update signals, applied item/config updates, and radial draw calls.

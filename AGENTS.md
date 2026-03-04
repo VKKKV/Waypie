@@ -15,12 +15,20 @@ This file is intentionally practical and command-focused.
 Current source layout (source of truth):
 
 - `src/main.rs` - entrypoint, global runtime/app state
-- `src/ui/` - UI composition, widget, hover logic, action routing
+- `src/ui/` - UI composition, widget, hover/click pure logic, action routing
 - `src/tray/` - tray watcher/client adapters
 - `src/config.rs` - config structs, defaults, load/watch logic
 - `src/color.rs` - color parsing and serde support
 - `src/cursor.rs` - Wayland virtual pointer logic
 - `src/utils.rs` - command spawning, geometry, config path helper
+- `src/telemetry.rs` - debug counters gated by `WAYPIE_DEBUG`
+
+Important UI module split:
+
+- `src/ui/radial.rs` - widget orchestration and GTK event handling
+- `src/ui/click_logic.rs` - pure click resolution helpers (unit-tested)
+- `src/ui/hover_state.rs` - pure hover/transition decision helpers (unit-tested)
+- `src/ui/action_dispatcher.rs` - action side effects (activate/context/dbus/command)
 
 ## Build, Lint, and Test Commands
 
@@ -51,8 +59,7 @@ Notes:
 
 ### Tests
 
-There are currently no committed Rust tests in `src/` or `tests/`.
-Still, use these commands when adding or running tests:
+Unit tests are committed under `src/` modules. Use these commands:
 
 - Run all tests: `cargo test`
 - Run tests without capturing output: `cargo test -- --nocapture`
@@ -68,6 +75,8 @@ Still, use these commands when adding or running tests:
 Useful when iterating on one module:
 
 - `cargo test ui::hover_state` (name filter)
+- `cargo test ui::click_logic` (name filter)
+- `cargo test config::tests::` (module tests)
 - `cargo test color::` (name filter)
 
 ### Run Locally
@@ -143,6 +152,8 @@ Follow existing patterns in touched files; do not reformat unrelated code.
   - hover timing delay before activation
   - inner/outer ring hit logic
 - Keep pointer math helpers deterministic and testable when possible.
+- Prefer putting pure decision logic in `ui::click_logic` / `ui::hover_state`, and keep GTK widget
+  code in `ui::radial` focused on orchestration.
 
 ## Repository-Specific Rules from Copilot Instructions
 
@@ -174,5 +185,7 @@ If Cursor rules are added later, treat them as high-priority repository policy a
 
 ## Future Development Notes
 
-- Add config file I/O tests by extracting small parse/load helpers from `load_config()` so behavior can be tested without touching real user config directories.
-- Prioritize cases for missing file creation, invalid TOML fallback, and write failures when generating defaults.
+- Add focused tests around `ui::action_dispatcher` effect routing (activate/context/dbus/command)
+  with injectable hooks or adapters to avoid GTK/runtime coupling.
+- Consider throttled telemetry summaries (periodic aggregate logs) under `WAYPIE_DEBUG` for easier
+  profiling of redraw/update bursts.

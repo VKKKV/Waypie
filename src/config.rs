@@ -354,7 +354,9 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
 
 #[cfg(test)]
 mod tests {
-    use super::{load_config_from_path, parse_config_str, reload_config_from_path, Config, UiConfig};
+    use super::{
+        load_config_from_path, parse_config_str, reload_config_from_path, Config, UiConfig,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
