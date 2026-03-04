@@ -21,7 +21,10 @@ impl RadialMenu {
     }
 
     pub fn set_items(&self, items: Vec<PieItem>) {
-        self.imp().items.replace(items);
+        let imp = self.imp();
+        imp.items.replace(items);
+        imp.parent_text_extents.borrow_mut().clear();
+        imp.child_text_extents.borrow_mut().clear();
         self.queue_draw();
     }
 

@@ -3,6 +3,7 @@ use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
 use gtk4::{EventControllerMotion, GestureClick, Snapshot};
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::f64::consts::PI;
 
 use super::radial::PieItem;
@@ -12,6 +13,8 @@ pub struct RadialMenu {
     // Data
     pub items: RefCell<Vec<PieItem>>,
     pub ui_config: RefCell<crate::config::UiConfig>,
+    pub parent_text_extents: RefCell<HashMap<String, (f64, f64)>>,
+    pub child_text_extents: RefCell<HashMap<String, (f64, f64)>>,
 
     // State
     pub active_parent_idx: Cell<Option<usize>>,
@@ -164,8 +167,18 @@ impl WidgetImpl for RadialMenu {
             let tx = center_x + text_radius * mid_angle.cos();
             let ty = center_y + text_radius * mid_angle.sin();
 
-            let ext = cr.text_extents(&item.label).unwrap();
-            cr.move_to(tx - ext.width() / 2.0, ty + ext.height() / 4.0);
+            let cached_parent = { self.parent_text_extents.borrow().get(&item.label).copied() };
+            let (text_w, text_h) = if let Some((w, h)) = cached_parent {
+                (w, h)
+            } else {
+                let ext = cr.text_extents(&item.label).unwrap();
+                let dims = (ext.width(), ext.height());
+                self.parent_text_extents
+                    .borrow_mut()
+                    .insert(item.label.clone(), dims);
+                dims
+            };
+            cr.move_to(tx - text_w / 2.0, ty + text_h / 4.0);
             cr.show_text(&item.label).unwrap();
         }
 
@@ -237,8 +250,19 @@ impl WidgetImpl for RadialMenu {
                             let tx = center_x + text_radius * mid_angle.cos();
                             let ty = center_y + text_radius * mid_angle.sin();
 
-                            let ext = cr.text_extents(&child.label).unwrap();
-                            cr.move_to(tx - ext.width() / 2.0, ty + ext.height() / 4.0);
+                            let cached_child =
+                                { self.child_text_extents.borrow().get(&child.label).copied() };
+                            let (text_w, text_h) = if let Some((w, h)) = cached_child {
+                                (w, h)
+                            } else {
+                                let ext = cr.text_extents(&child.label).unwrap();
+                                let dims = (ext.width(), ext.height());
+                                self.child_text_extents
+                                    .borrow_mut()
+                                    .insert(child.label.clone(), dims);
+                                dims
+                            };
+                            cr.move_to(tx - text_w / 2.0, ty + text_h / 4.0);
                             cr.show_text(&child.label).unwrap();
                         }
                     }
