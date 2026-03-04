@@ -206,6 +206,107 @@ impl RadialMenu {
         imp.animation_timeout_id.replace(Some(source_id));
     }
 
+    fn resolve_clicked_action(&self, button: u32) -> Option<Action> {
+        let imp = self.imp();
+        let items = imp.items.borrow();
+
+        if let Some(child_idx) = imp.hover_child_idx.get() {
+            if let Some(active_idx) = imp.active_parent_idx.get() {
+                if let Some(parent) = items.get(active_idx) {
+                    if let Some(child) = parent.children.get(child_idx) {
+                        return Some(resolve_child_click_action(child, button));
+                    }
+                }
+            }
+        }
+
+        if let Some(parent_idx) = imp.hover_parent_idx.get() {
+            if let Some(parent) = items.get(parent_idx) {
+                if parent.children.is_empty() {
+                    return Some(parent.action.clone());
+                }
+            }
+        }
+
+        None
+    }
+
+    fn dispatch_action(&self, action: Action, x: f64, y: f64) {
+        match action {
+            Action::Activate {
+                service,
+                path,
+                menu_path,
+            } => {
+                gtk4::glib::spawn_future_local(async move {
+                    let success =
+                        crate::tray::activate_or_popup(service, path, menu_path, x, y).await;
+
+                    if success {
+                        std::process::exit(0);
+                    }
+                });
+            }
+            Action::Context {
+                service, menu_path, ..
+            } => {
+                let self_clone = self.clone();
+                gtk4::glib::spawn_future_local(async move {
+                    match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
+                        Ok(items) => {
+                            println!("Waypie: Context menu fetched with {} items", items.len());
+                            self_clone.set_items(items);
+                        }
+                        Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
+                    }
+                });
+            }
+            Action::DbusSignal { service, path, id } => {
+                crate::RUNTIME
+                    .get()
+                    .expect("Runtime not initialized")
+                    .spawn(async move {
+                        match zbus::Connection::session().await {
+                            Ok(conn) => {
+                                let result = conn
+                                    .call_method(
+                                        Some(service.as_str()),
+                                        path.as_str(),
+                                        Some("com.canonical.dbusmenu"),
+                                        "Event",
+                                        &(
+                                            id,
+                                            "clicked",
+                                            zbus::zvariant::Value::Str("".into()),
+                                            0u32,
+                                        ),
+                                    )
+                                    .await;
+
+                                match result {
+                                    Ok(_) => std::process::exit(0),
+                                    Err(e) => eprintln!("Waypie: DBus Event failed: {}", e),
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Waypie: Failed to connect to session bus: {}", e)
+                            }
+                        }
+                    });
+            }
+            Action::Command(cmd) => {
+                if !cmd.is_empty() {
+                    if let Err(e) = crate::utils::spawn_app(&cmd) {
+                        eprintln!("Waypie: Failed to execute command '{}': {}", cmd, e);
+                    } else {
+                        std::process::exit(0);
+                    }
+                }
+            }
+            Action::None => {}
+        }
+    }
+
     pub fn handle_click(&self, gesture: &GestureClick, _n_press: i32, x: f64, y: f64) {
         let imp = self.imp();
         let w = self.width() as f64;
@@ -213,8 +314,7 @@ impl RadialMenu {
         let cx = w / 2.0;
         let cy = h / 2.0;
 
-        let (dist, _angle_deg) = crate::utils::cartesian_to_polar(x, y, cx, cy);
-        let items = imp.items.borrow();
+        let (dist, _) = crate::utils::cartesian_to_polar(x, y, cx, cy);
         let button = gesture.current_button();
 
         let ui = imp.ui_config.borrow();
@@ -222,118 +322,90 @@ impl RadialMenu {
             std::process::exit(0);
         }
 
-        let mut clicked_action = None;
-
-        if let Some(child_idx) = imp.hover_child_idx.get() {
-            if let Some(active_idx) = imp.active_parent_idx.get() {
-                if let Some(parent) = items.get(active_idx) {
-                    if let Some(child) = parent.children.get(child_idx) {
-                        if child.item_type.as_deref() == Some("tray_app")
-                            && button == gtk4::gdk::BUTTON_SECONDARY
-                            || button == gtk4::gdk::BUTTON_PRIMARY
-                        {
-                            if let Action::Activate {
-                                service,
-                                path,
-                                menu_path,
-                            } = &child.action
-                            {
-                                clicked_action = Some(Action::Context {
-                                    service: service.clone(),
-                                    path: path.clone(),
-                                    menu_path: menu_path.clone(),
-                                });
-                            } else {
-                                clicked_action = Some(child.action.clone());
-                            }
-                        } else {
-                            clicked_action = Some(child.action.clone());
-                        }
-                    }
-                }
-            }
-        } else if let Some(parent_idx) = imp.hover_parent_idx.get() {
-            if let Some(parent) = items.get(parent_idx) {
-                if parent.children.is_empty() {
-                    clicked_action = Some(parent.action.clone());
-                }
-            }
+        if let Some(action) = self.resolve_clicked_action(button) {
+            self.dispatch_action(action, x, y);
         }
+    }
+}
 
-        if let Some(action) = clicked_action {
-            match action {
-                Action::Activate {
-                    service,
-                    path,
-                    menu_path,
-                } => {
-                    gtk4::glib::spawn_future_local(async move {
-                        let success =
-                            crate::tray::activate_or_popup(service, path, menu_path, x, y).await;
-
-                        if success {
-                            std::process::exit(0);
-                        }
-                    });
-                }
-                Action::Context {
-                    service, menu_path, ..
-                } => {
-                    let self_clone = self.clone();
-                    gtk4::glib::spawn_future_local(async move {
-                        match crate::tray::fetch_dbus_menu_as_pie(service, menu_path).await {
-                            Ok(items) => {
-                                println!("Waypie: Context menu fetched with {} items", items.len());
-                                self_clone.set_items(items);
-                            }
-                            Err(e) => eprintln!("Waypie: Failed to fetch context menu: {}", e),
-                        }
-                    });
-                }
-                Action::DbusSignal { service, path, id } => {
-                    crate::RUNTIME
-                        .get()
-                        .expect("Runtime not initialized")
-                        .spawn(async move {
-                            match zbus::Connection::session().await {
-                                Ok(conn) => {
-                                    let result = conn
-                                        .call_method(
-                                            Some(service.as_str()),
-                                            path.as_str(),
-                                            Some("com.canonical.dbusmenu"),
-                                            "Event",
-                                            &(
-                                                id,
-                                                "clicked",
-                                                zbus::zvariant::Value::Str("".into()),
-                                                0u32,
-                                            ),
-                                        )
-                                        .await;
-
-                                    match result {
-                                        Ok(_) => std::process::exit(0),
-                                        Err(e) => eprintln!("Waypie: DBus Event failed: {}", e),
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("Waypie: Failed to connect to session bus: {}", e)
-                                }
-                            }
-                        });
-                }
-                Action::Command(cmd) => {
-                    if !cmd.is_empty() {
-                        if let Err(e) = crate::utils::spawn_app(&cmd) {
-                            eprintln!("Waypie: Failed to execute command '{}': {}", cmd, e);
-                        } else {
-                            std::process::exit(0);
-                        }
-                    }
-                }
-                Action::None => {}
-            }
+fn resolve_child_click_action(child: &PieItem, button: u32) -> Action {
+    if should_open_context_for_child(child, button) {
+        if let Action::Activate {
+            service,
+            path,
+            menu_path,
+        } = &child.action
+        {
+            return Action::Context {
+                service: service.clone(),
+                path: path.clone(),
+                menu_path: menu_path.clone(),
+            };
         }
+    }
+
+    child.action.clone()
+}
+
+fn should_open_context_for_child(child: &PieItem, button: u32) -> bool {
+    child.item_type.as_deref() == Some("tray_app") && button == gtk4::gdk::BUTTON_SECONDARY
+        || button == gtk4::gdk::BUTTON_PRIMARY
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_child_click_action, should_open_context_for_child, Action, PieItem};
+
+    fn child_with_action(action: Action, item_type: Option<&str>) -> PieItem {
+        PieItem {
+            label: "item".to_string(),
+            icon: "icon".to_string(),
+            action,
+            children: vec![],
+            item_type: item_type.map(|s| s.to_string()),
+            tray_id: None,
+        }
+    }
+
+    #[test]
+    fn primary_button_opens_context_for_activate_action() {
+        let child = child_with_action(
+            Action::Activate {
+                service: "svc".to_string(),
+                path: "/path".to_string(),
+                menu_path: "/menu".to_string(),
+            },
+            Some("tray_app"),
+        );
+
+        let resolved = resolve_child_click_action(&child, gtk4::gdk::BUTTON_PRIMARY);
+        assert!(matches!(resolved, Action::Context { .. }));
+    }
+
+    #[test]
+    fn secondary_button_non_tray_keeps_original_action() {
+        let child = child_with_action(Action::Command("alacritty".to_string()), None);
+
+        let resolved = resolve_child_click_action(&child, gtk4::gdk::BUTTON_SECONDARY);
+        assert_eq!(resolved, Action::Command("alacritty".to_string()));
+    }
+
+    #[test]
+    fn context_opening_matches_existing_logic() {
+        let tray_child = child_with_action(Action::None, Some("tray_app"));
+        let non_tray_child = child_with_action(Action::None, None);
+
+        assert!(should_open_context_for_child(
+            &tray_child,
+            gtk4::gdk::BUTTON_SECONDARY,
+        ));
+        assert!(should_open_context_for_child(
+            &non_tray_child,
+            gtk4::gdk::BUTTON_PRIMARY,
+        ));
+        assert!(!should_open_context_for_child(
+            &non_tray_child,
+            gtk4::gdk::BUTTON_SECONDARY,
+        ));
     }
 }
