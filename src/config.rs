@@ -313,7 +313,7 @@ pub async fn watch_config(config_store: Arc<RwLock<Config>>, sender: async_chann
                                 if let Ok(mut w) = config_store.write() {
                                     *w = new_config;
                                 }
-                                let _ = sender.send(()).await;
+                                let _ = sender.try_send(());
                                 println!("Config reloaded successfully.");
                             }
                             Err(e) => eprintln!("Config reload failed (Parse Error): {}", e),

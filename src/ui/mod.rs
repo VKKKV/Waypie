@@ -21,7 +21,7 @@ pub fn build_ui(app: &Application) {
     let config_store = Arc::new(RwLock::new(initial_config.clone()));
 
     // 2. Setup Tokio Runtime & Config Watcher
-    let (sender, receiver) = async_channel::unbounded::<()>();
+    let (sender, receiver) = async_channel::bounded::<()>(1);
     let config_store_clone = config_store.clone();
 
     let sni = Arc::new(SNIWatcher::new(Some(sender.clone())));

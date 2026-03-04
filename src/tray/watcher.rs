@@ -1,9 +1,9 @@
+use async_channel::Sender;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use system_tray::client::{Client, Event, UpdateEvent};
 use system_tray::item::StatusNotifierItem;
 use system_tray::menu::TrayMenu;
-use async_channel::Sender;
 
 // -----------------------------------------------------------------------------
 // Data Structures
@@ -11,7 +11,7 @@ use async_channel::Sender;
 
 #[derive(Clone, Debug)]
 pub struct TrayItem {
-    pub name: String, 
+    pub name: String,
     pub icon_name: String,
     pub title: String,
     pub path: String,
@@ -44,22 +44,31 @@ impl SNIWatcher {
 
     pub fn get_legacy_items(&self) -> Vec<TrayItem> {
         let store = self.state.items.lock().unwrap();
-        store.iter().map(|(key, (item, _))| {
-            let (service, path) = key.split_once('/').unwrap_or((key.as_str(), "/StatusNotifierItem"));
-            let path = if path.starts_with('/') {
-                path.to_string()
-            } else {
-                format!("/{}", path)
-            };
-            TrayItem {
-                name: key.clone(),
-                icon_name: item.icon_name.clone().unwrap_or_default(),
-                title: item.title.clone().unwrap_or_else(|| item.id.clone()),
-                path,
-                service: service.to_string(),
-                menu_path: item.menu.as_ref().map(|p| p.to_string()).unwrap_or_default(),
-            }
-        }).collect()
+        store
+            .iter()
+            .map(|(key, (item, _))| {
+                let (service, path) = key
+                    .split_once('/')
+                    .unwrap_or((key.as_str(), "/StatusNotifierItem"));
+                let path = if path.starts_with('/') {
+                    path.to_string()
+                } else {
+                    format!("/{}", path)
+                };
+                TrayItem {
+                    name: key.clone(),
+                    icon_name: item.icon_name.clone().unwrap_or_default(),
+                    title: item.title.clone().unwrap_or_else(|| item.id.clone()),
+                    path,
+                    service: service.to_string(),
+                    menu_path: item
+                        .menu
+                        .as_ref()
+                        .map(|p| p.to_string())
+                        .unwrap_or_default(),
+                }
+            })
+            .collect()
     }
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -101,11 +110,10 @@ impl SNIWatcher {
             }
 
             if let Some(tx) = &update_tx {
-                let _ = tx.send(()).await;
+                let _ = tx.try_send(());
             }
         }
 
         Ok(())
     }
 }
-
