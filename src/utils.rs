@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use std::process::Command;
-use std::path::PathBuf;
 use directories::ProjectDirs;
+use std::path::PathBuf;
+use std::process::Command;
 
 /// Spawns an application in a detached way.
 /// Handles shell argument parsing (e.g. quotes) using `shlex`.
@@ -38,4 +38,34 @@ pub fn cartesian_to_polar(x: f64, y: f64, cx: f64, cy: f64) -> (f64, f64) {
 /// Returns the path to the configuration file.
 pub fn get_config_path() -> Option<PathBuf> {
     ProjectDirs::from("org", "waypie", "waypie").map(|proj| proj.config_dir().join("config.toml"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cartesian_to_polar;
+
+    fn approx_eq(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    #[test]
+    fn cartesian_to_polar_right_of_center() {
+        let (dist, angle) = cartesian_to_polar(2.0, 1.0, 1.0, 1.0);
+        assert!(approx_eq(dist, 1.0));
+        assert!(approx_eq(angle, 0.0));
+    }
+
+    #[test]
+    fn cartesian_to_polar_above_center() {
+        let (dist, angle) = cartesian_to_polar(1.0, 0.0, 1.0, 1.0);
+        assert!(approx_eq(dist, 1.0));
+        assert!(approx_eq(angle, -90.0));
+    }
+
+    #[test]
+    fn cartesian_to_polar_same_point_as_center() {
+        let (dist, angle) = cartesian_to_polar(1.0, 1.0, 1.0, 1.0);
+        assert!(approx_eq(dist, 0.0));
+        assert!(approx_eq(angle, 0.0));
+    }
 }

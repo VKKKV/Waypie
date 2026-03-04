@@ -62,3 +62,51 @@ where
     let s = <&str>::deserialize(deserializer)?;
     hex_to_color(s).map_err(serde::de::Error::custom)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{hex_to_color, ColorRGB, ColorRGBA};
+
+    fn approx_eq(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    #[test]
+    fn parses_rgb_hex() {
+        let (r, g, b): ColorRGB = hex_to_color("#3366cc").unwrap();
+        assert!(approx_eq(r, 0x33 as f64 / 255.0));
+        assert!(approx_eq(g, 0x66 as f64 / 255.0));
+        assert!(approx_eq(b, 0xcc as f64 / 255.0));
+    }
+
+    #[test]
+    fn parses_rgba_hex() {
+        let (r, g, b, a): ColorRGBA = hex_to_color("#3366cc80").unwrap();
+        assert!(approx_eq(r, 0x33 as f64 / 255.0));
+        assert!(approx_eq(g, 0x66 as f64 / 255.0));
+        assert!(approx_eq(b, 0xcc as f64 / 255.0));
+        assert!(approx_eq(a, 0x80 as f64 / 255.0));
+    }
+
+    #[test]
+    fn supports_0x_prefix() {
+        let (r, g, b): ColorRGB = hex_to_color("0xff0000").unwrap();
+        assert!(approx_eq(r, 1.0));
+        assert!(approx_eq(g, 0.0));
+        assert!(approx_eq(b, 0.0));
+    }
+
+    #[test]
+    fn rejects_invalid_length() {
+        let result: Result<ColorRGB, String> = hex_to_color("#fff");
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("invalid hex length"));
+    }
+
+    #[test]
+    fn rejects_invalid_hex_chars() {
+        let result: Result<ColorRGB, String> = hex_to_color("#gg0000");
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), "invalid hex string");
+    }
+}
