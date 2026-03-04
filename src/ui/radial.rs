@@ -3,7 +3,7 @@ use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
 use gtk4::GestureClick;
 
-use crate::ui::click_logic::resolve_child_click_action;
+use crate::ui::click_logic::resolve_clicked_action;
 use crate::ui::hover_state::{
     calculate_hovered_item, get_child_count, get_hover_zone, normalize_angle, HoverZone,
 };
@@ -249,25 +249,13 @@ impl RadialMenu {
         let imp = self.imp();
         let items = imp.items.borrow();
 
-        if let Some(child_idx) = imp.hover_child_idx.get() {
-            if let Some(active_idx) = imp.active_parent_idx.get() {
-                if let Some(parent) = items.get(active_idx) {
-                    if let Some(child) = parent.children.get(child_idx) {
-                        return Some(resolve_child_click_action(child, button));
-                    }
-                }
-            }
-        }
-
-        if let Some(parent_idx) = imp.hover_parent_idx.get() {
-            if let Some(parent) = items.get(parent_idx) {
-                if parent.children.is_empty() {
-                    return Some(parent.action.clone());
-                }
-            }
-        }
-
-        None
+        resolve_clicked_action(
+            &items,
+            imp.hover_child_idx.get(),
+            imp.active_parent_idx.get(),
+            imp.hover_parent_idx.get(),
+            button,
+        )
     }
 
     fn dispatch_action(&self, action: Action, x: f64, y: f64) {

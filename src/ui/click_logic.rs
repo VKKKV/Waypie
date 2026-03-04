@@ -1,5 +1,33 @@
 use crate::ui::menu_model::{Action, PieItem};
 
+pub fn resolve_clicked_action(
+    items: &[PieItem],
+    hover_child_idx: Option<usize>,
+    active_parent_idx: Option<usize>,
+    hover_parent_idx: Option<usize>,
+    button: u32,
+) -> Option<Action> {
+    if let Some(child_idx) = hover_child_idx {
+        if let Some(active_idx) = active_parent_idx {
+            if let Some(parent) = items.get(active_idx) {
+                if let Some(child) = parent.children.get(child_idx) {
+                    return Some(resolve_child_click_action(child, button));
+                }
+            }
+        }
+    }
+
+    if let Some(parent_idx) = hover_parent_idx {
+        if let Some(parent) = items.get(parent_idx) {
+            if parent.children.is_empty() {
+                return Some(parent.action.clone());
+            }
+        }
+    }
+
+    None
+}
+
 pub fn resolve_child_click_action(child: &PieItem, button: u32) -> Action {
     if should_open_context_for_child(child, button) {
         if let Action::Activate {
@@ -26,7 +54,9 @@ pub fn should_open_context_for_child(child: &PieItem, button: u32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_child_click_action, should_open_context_for_child};
+    use super::{
+        resolve_child_click_action, resolve_clicked_action, should_open_context_for_child,
+    };
     use crate::ui::menu_model::{Action, PieItem};
 
     fn child_with_action(action: Action, item_type: Option<&str>) -> PieItem {
@@ -89,5 +119,38 @@ mod tests {
             &tray_child,
             gtk4::gdk::BUTTON_MIDDLE,
         ));
+    }
+
+    #[test]
+    fn resolve_clicked_action_prefers_hovered_child() {
+        let child = child_with_action(Action::Command("cmd".to_string()), None);
+        let parent = PieItem {
+            label: "parent".to_string(),
+            icon: "icon".to_string(),
+            action: Action::Command("parent-cmd".to_string()),
+            children: vec![child],
+            item_type: None,
+            tray_id: None,
+        };
+
+        let action = resolve_clicked_action(
+            &[parent],
+            Some(0),
+            Some(0),
+            Some(0),
+            gtk4::gdk::BUTTON_PRIMARY,
+        );
+
+        assert_eq!(action, Some(Action::Command("cmd".to_string())));
+    }
+
+    #[test]
+    fn resolve_clicked_action_falls_back_to_leaf_parent() {
+        let parent = child_with_action(Action::Command("parent-cmd".to_string()), None);
+
+        let action =
+            resolve_clicked_action(&[parent], None, None, Some(0), gtk4::gdk::BUTTON_PRIMARY);
+
+        assert_eq!(action, Some(Action::Command("parent-cmd".to_string())));
     }
 }
