@@ -267,17 +267,9 @@ impl RadialMenu {
                     path,
                     menu_path,
                 } => {
-                    let self_clone = self.clone();
                     gtk4::glib::spawn_future_local(async move {
-                        let success = crate::tray::activate_or_popup(
-                            service,
-                            path,
-                            menu_path,
-                            self_clone.upcast_ref::<gtk4::Widget>().clone(),
-                            x,
-                            y,
-                        )
-                        .await;
+                        let success =
+                            crate::tray::activate_or_popup(service, path, menu_path, x, y).await;
 
                         if success {
                             std::process::exit(0);

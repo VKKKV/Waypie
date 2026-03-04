@@ -9,7 +9,6 @@ pub async fn activate_or_popup(
     service: String,
     item_path: String,
     _menu_path: String,
-    _parent_widget: gtk4::Widget,
     x: f64,
     y: f64,
 ) -> bool {

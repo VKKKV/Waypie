@@ -83,24 +83,31 @@ pub fn build_ui(app: &Application) {
 
     gtk4::glib::spawn_future_local(async move {
         while receiver.recv().await.is_ok() {
-            if let Some(menu) = menu_weak.upgrade() {
-                if let Some(store) = store_weak.upgrade() {
-                    if let Ok(cfg) = store.read() {
-                        let current_tray_items = if let Some(sni_up) = sni_weak.upgrade() {
-                            sni_up.get_legacy_items()
-                        } else {
-                            Vec::new()
-                        };
-                        let new_items = convert_menu_items(&cfg.menu, &current_tray_items);
-                        if !menu.items_equal(&new_items) {
-                            menu.set_items(new_items);
-                        }
+            let Some(menu) = menu_weak.upgrade() else {
+                break;
+            };
 
-                        if !menu.ui_config_equal(&cfg.ui) {
-                            menu.set_ui_config(cfg.ui.clone());
-                        }
-                    }
-                }
+            let Some(store) = store_weak.upgrade() else {
+                break;
+            };
+
+            let cfg = match store.read() {
+                Ok(cfg) => cfg.clone(),
+                Err(_) => continue,
+            };
+
+            let current_tray_items = if let Some(sni_up) = sni_weak.upgrade() {
+                sni_up.get_legacy_items()
+            } else {
+                Vec::new()
+            };
+            let new_items = convert_menu_items(&cfg.menu, &current_tray_items);
+            if !menu.items_equal(&new_items) {
+                menu.set_items(new_items);
+            }
+
+            if !menu.ui_config_equal(&cfg.ui) {
+                menu.set_ui_config(cfg.ui.clone());
             }
         }
     });
