@@ -1,3 +1,4 @@
+pub mod action_dispatcher;
 pub mod adapter;
 pub mod click_logic;
 pub mod hover_state;
