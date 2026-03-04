@@ -85,6 +85,8 @@ pub fn build_ui(app: &Application) {
 
     gtk4::glib::spawn_future_local(async move {
         while receiver.recv().await.is_ok() {
+            crate::telemetry::incr_ui_update_signals();
+
             let Some(menu) = menu_weak.upgrade() else {
                 break;
             };
@@ -105,10 +107,12 @@ pub fn build_ui(app: &Application) {
             };
             let new_items = convert_menu_items(&cfg.menu, &current_tray_items);
             if !menu.items_equal(&new_items) {
+                crate::telemetry::incr_ui_items_applies();
                 menu.set_items(new_items);
             }
 
             if !menu.ui_config_equal(&cfg.ui) {
+                crate::telemetry::incr_ui_config_applies();
                 menu.set_ui_config(cfg.ui.clone());
             }
         }

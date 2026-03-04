@@ -6,6 +6,7 @@ use tokio::runtime::Runtime;
 mod color;
 mod config;
 mod cursor;
+mod telemetry;
 mod tray;
 mod ui;
 mod utils;

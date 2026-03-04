@@ -82,6 +82,8 @@ impl ObjectImpl for RadialMenu {
 
 impl WidgetImpl for RadialMenu {
     fn snapshot(&self, snapshot: &Snapshot) {
+        crate::telemetry::incr_radial_draws();
+
         let obj = self.obj();
         let w = obj.width() as f64;
         let h = obj.height() as f64;
