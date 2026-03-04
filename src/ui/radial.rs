@@ -57,57 +57,31 @@ impl RadialMenu {
         }
 
         let mut should_redraw = false;
-        let mut reset_hover_child = true;
+        let mut keep_hover_child = false;
         let ui = imp.ui_config.borrow();
         let norm_angle = normalize_angle(angle_deg);
 
         match get_hover_zone(dist, ui.center_radius, ui.inner_radius, ui.outer_radius) {
             HoverZone::Center => {
-                if imp.hover_parent_idx.get().is_some() {
-                    imp.hover_parent_idx.set(None);
-                    self.clear_hover_timeout();
-                    should_redraw = true;
-                }
+                should_redraw |= self.clear_hover_parent();
             }
             HoverZone::InnerRing => {
                 if let Some(idx) = calculate_hovered_item(norm_angle, parent_count) {
-                    if imp.hover_parent_idx.get() != Some(idx) {
-                        imp.hover_parent_idx.set(Some(idx));
-                        self.schedule_hover_activation(idx);
-                        should_redraw = true;
-                    }
+                    should_redraw |= self.set_hover_parent(idx);
                 }
             }
             HoverZone::OuterRing => {
-                if let Some(active_idx) = imp.active_parent_idx.get() {
-                    let child_count = get_child_count(&items, active_idx);
-                    if child_count > 0 {
-                        if let Some(idx) = calculate_hovered_item(norm_angle, child_count) {
-                            if imp.hover_child_idx.get() != Some(idx) {
-                                imp.hover_child_idx.set(Some(idx));
-                                should_redraw = true;
-                            }
-                            reset_hover_child = false;
-                        }
-                    }
-                } else if imp.hover_parent_idx.get().is_some() {
-                    imp.hover_parent_idx.set(None);
-                    self.clear_hover_timeout();
-                    should_redraw = true;
-                }
+                let (outer_redraw, keep_child) = self.update_outer_ring_hover(norm_angle, &items);
+                should_redraw |= outer_redraw;
+                keep_hover_child = keep_child;
             }
             HoverZone::Outside => {
-                if imp.hover_parent_idx.get().is_some() {
-                    imp.hover_parent_idx.set(None);
-                    self.clear_hover_timeout();
-                    should_redraw = true;
-                }
+                should_redraw |= self.clear_hover_parent();
             }
         }
 
-        if reset_hover_child && imp.hover_child_idx.get().is_some() {
-            imp.hover_child_idx.set(None);
-            should_redraw = true;
+        if !keep_hover_child {
+            should_redraw |= self.clear_hover_child();
         }
 
         if should_redraw {
@@ -129,6 +103,64 @@ impl RadialMenu {
         if let Some(source_id) = self.imp().hover_timeout_id.borrow_mut().take() {
             source_id.remove();
         }
+    }
+
+    fn clear_hover_parent(&self) -> bool {
+        let imp = self.imp();
+        if imp.hover_parent_idx.get().is_some() {
+            imp.hover_parent_idx.set(None);
+            self.clear_hover_timeout();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn set_hover_parent(&self, idx: usize) -> bool {
+        let imp = self.imp();
+        if imp.hover_parent_idx.get() != Some(idx) {
+            imp.hover_parent_idx.set(Some(idx));
+            self.schedule_hover_activation(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn clear_hover_child(&self) -> bool {
+        let imp = self.imp();
+        if imp.hover_child_idx.get().is_some() {
+            imp.hover_child_idx.set(None);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn set_hover_child(&self, idx: usize) -> bool {
+        let imp = self.imp();
+        if imp.hover_child_idx.get() != Some(idx) {
+            imp.hover_child_idx.set(Some(idx));
+            true
+        } else {
+            false
+        }
+    }
+
+    fn update_outer_ring_hover(&self, norm_angle: f64, items: &[PieItem]) -> (bool, bool) {
+        let imp = self.imp();
+
+        if let Some(active_idx) = imp.active_parent_idx.get() {
+            let child_count = get_child_count(items, active_idx);
+            if child_count > 0 {
+                if let Some(idx) = calculate_hovered_item(norm_angle, child_count) {
+                    return (self.set_hover_child(idx), true);
+                }
+            }
+            return (false, false);
+        }
+
+        (self.clear_hover_parent(), false)
     }
 
     fn schedule_hover_activation(&self, hover_idx: usize) {
@@ -406,6 +438,15 @@ mod tests {
         assert!(!should_open_context_for_child(
             &non_tray_child,
             gtk4::gdk::BUTTON_SECONDARY,
+        ));
+    }
+
+    #[test]
+    fn non_primary_non_secondary_does_not_open_context() {
+        let tray_child = child_with_action(Action::None, Some("tray_app"));
+        assert!(!should_open_context_for_child(
+            &tray_child,
+            gtk4::gdk::BUTTON_MIDDLE
         ));
     }
 }
