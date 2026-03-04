@@ -2,7 +2,6 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
 use gtk4::GestureClick;
-use std::time::{Duration, Instant};
 
 use crate::ui::hover_state::{
     calculate_hovered_item, get_child_count, get_hover_zone, normalize_angle, HoverZone,
@@ -55,7 +54,7 @@ impl RadialMenu {
             HoverZone::Center => {
                 if imp.hover_parent_idx.get().is_some() {
                     imp.hover_parent_idx.set(None);
-                    imp.hover_start_time.set(None);
+                    self.clear_hover_timeout();
                     should_redraw = true;
                 }
             }
@@ -63,7 +62,7 @@ impl RadialMenu {
                 if let Some(idx) = calculate_hovered_item(norm_angle, parent_count) {
                     if imp.hover_parent_idx.get() != Some(idx) {
                         imp.hover_parent_idx.set(Some(idx));
-                        imp.hover_start_time.set(Some(Instant::now()));
+                        self.schedule_hover_activation(idx);
                         should_redraw = true;
                     }
                 }
@@ -82,14 +81,14 @@ impl RadialMenu {
                     }
                 } else if imp.hover_parent_idx.get().is_some() {
                     imp.hover_parent_idx.set(None);
-                    imp.hover_start_time.set(None);
+                    self.clear_hover_timeout();
                     should_redraw = true;
                 }
             }
             HoverZone::Outside => {
                 if imp.hover_parent_idx.get().is_some() {
                     imp.hover_parent_idx.set(None);
-                    imp.hover_start_time.set(None);
+                    self.clear_hover_timeout();
                     should_redraw = true;
                 }
             }
@@ -107,35 +106,93 @@ impl RadialMenu {
 
     pub fn handle_leave(&self) {
         let imp = self.imp();
+        self.clear_hover_timeout();
         imp.hover_parent_idx.set(None);
         imp.hover_child_idx.set(None);
         imp.active_parent_idx.set(None);
-        imp.target_progress.set(0.0);
+        self.start_animation(0.0);
         self.queue_draw();
     }
 
-    pub fn check_hover_timer(&self) {
-        let imp = self.imp();
+    fn clear_hover_timeout(&self) {
+        if let Some(source_id) = self.imp().hover_timeout_id.borrow_mut().take() {
+            source_id.remove();
+        }
+    }
 
-        if let Some(hover_idx) = imp.hover_parent_idx.get() {
-            if Some(hover_idx) != imp.active_parent_idx.get() {
-                if let Some(start_time) = imp.hover_start_time.get() {
-                    if start_time.elapsed() >= Duration::from_millis(100) {
+    fn schedule_hover_activation(&self, hover_idx: usize) {
+        self.clear_hover_timeout();
+
+        let weak_self = self.downgrade();
+        let source_id =
+            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+                if let Some(menu) = weak_self.upgrade() {
+                    let imp = menu.imp();
+
+                    if imp.hover_parent_idx.get() == Some(hover_idx)
+                        && imp.active_parent_idx.get() != Some(hover_idx)
+                    {
                         imp.active_parent_idx.set(Some(hover_idx));
-
                         let child_count = get_child_count(&imp.items.borrow(), hover_idx);
                         let target = if child_count > 0 { 1.0 } else { 0.0 };
-
-                        if (imp.target_progress.get() - target).abs() > 0.001 {
-                            imp.target_progress.set(target);
-                            self.queue_draw();
-                        } else {
-                            self.queue_draw();
-                        }
+                        menu.start_animation(target);
+                        menu.queue_draw();
                     }
+
+                    imp.hover_timeout_id.borrow_mut().take();
                 }
-            }
+
+                gtk4::glib::ControlFlow::Break
+            });
+
+        self.imp().hover_timeout_id.replace(Some(source_id));
+    }
+
+    fn start_animation(&self, target: f64) {
+        let imp = self.imp();
+        imp.target_progress.set(target);
+
+        if imp.animation_timeout_id.borrow().is_some() {
+            return;
         }
+
+        let current = imp.outer_ring_progress.get();
+        if (target - current).abs() < 0.001 {
+            if current != target {
+                imp.outer_ring_progress.set(target);
+                self.queue_draw();
+            }
+            return;
+        }
+
+        let weak_self = self.downgrade();
+        let source_id =
+            gtk4::glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+                if let Some(menu) = weak_self.upgrade() {
+                    let imp = menu.imp();
+                    let current = imp.outer_ring_progress.get();
+                    let target = imp.target_progress.get();
+
+                    if (target - current).abs() < 0.001 {
+                        if current != target {
+                            imp.outer_ring_progress.set(target);
+                            menu.queue_draw();
+                        }
+                        imp.animation_timeout_id.borrow_mut().take();
+                        return gtk4::glib::ControlFlow::Break;
+                    }
+
+                    let next = current + (target - current) * 0.2;
+                    imp.outer_ring_progress.set(next);
+                    menu.queue_draw();
+
+                    return gtk4::glib::ControlFlow::Continue;
+                }
+
+                gtk4::glib::ControlFlow::Break
+            });
+
+        imp.animation_timeout_id.replace(Some(source_id));
     }
 
     pub fn handle_click(&self, gesture: &GestureClick, _n_press: i32, x: f64, y: f64) {

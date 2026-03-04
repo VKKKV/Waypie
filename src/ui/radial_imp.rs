@@ -4,7 +4,6 @@ use gtk4::subclass::prelude::*;
 use gtk4::{EventControllerMotion, GestureClick, Snapshot};
 use std::cell::{Cell, RefCell};
 use std::f64::consts::PI;
-use std::time::Instant;
 
 use super::radial::PieItem;
 
@@ -18,11 +17,12 @@ pub struct RadialMenu {
     pub active_parent_idx: Cell<Option<usize>>,
     pub hover_parent_idx: Cell<Option<usize>>,
     pub hover_child_idx: Cell<Option<usize>>,
-    pub hover_start_time: Cell<Option<Instant>>,
+    pub hover_timeout_id: RefCell<Option<glib::SourceId>>,
 
     // Animation
     pub outer_ring_progress: Cell<f64>, // 0.0 to 1.0
     pub target_progress: Cell<f64>,     // 0.0 or 1.0
+    pub animation_timeout_id: RefCell<Option<glib::SourceId>>,
 }
 
 #[glib::object_subclass]
@@ -74,34 +74,6 @@ impl ObjectImpl for RadialMenu {
             }
         });
         obj.add_controller(click);
-
-        // Hover Timer
-        obj.add_tick_callback(|obj, _clock| {
-            obj.check_hover_timer();
-            glib::ControlFlow::Continue
-        });
-
-        // Animation Loop
-        obj.add_tick_callback(|obj, _clock| {
-            let imp = obj.imp();
-            let current = imp.outer_ring_progress.get();
-            let target = imp.target_progress.get();
-
-            if (target - current).abs() < 0.001 {
-                if current != target {
-                    imp.outer_ring_progress.set(target);
-                    obj.queue_draw();
-                }
-                return glib::ControlFlow::Continue;
-            }
-
-            // Lerp: current + (target - current) * speed
-            let next = current + (target - current) * 0.2;
-            imp.outer_ring_progress.set(next);
-            obj.queue_draw();
-
-            glib::ControlFlow::Continue
-        });
     }
 }
 
