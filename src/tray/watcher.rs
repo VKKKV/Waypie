@@ -44,31 +44,37 @@ impl SNIWatcher {
 
     pub fn get_legacy_items(&self) -> Vec<TrayItem> {
         let store = self.state.items.lock().unwrap();
-        store
-            .iter()
-            .map(|(key, (item, _))| {
-                let (service, path) = key
-                    .split_once('/')
-                    .unwrap_or((key.as_str(), "/StatusNotifierItem"));
-                let path = if path.starts_with('/') {
-                    path.to_string()
-                } else {
-                    format!("/{}", path)
-                };
-                TrayItem {
-                    name: key.clone(),
-                    icon_name: item.icon_name.clone().unwrap_or_default(),
-                    title: item.title.clone().unwrap_or_else(|| item.id.clone()),
-                    path,
-                    service: service.to_string(),
-                    menu_path: item
-                        .menu
-                        .as_ref()
-                        .map(|p| p.to_string())
-                        .unwrap_or_default(),
-                }
-            })
-            .collect()
+        let mut items = Vec::with_capacity(store.len());
+
+        for (key, (item, _)) in store.iter() {
+            let (service, path) = key
+                .split_once('/')
+                .unwrap_or((key.as_str(), "/StatusNotifierItem"));
+
+            let normalized_path = if path.starts_with('/') {
+                path.to_string()
+            } else {
+                let mut p = String::with_capacity(path.len() + 1);
+                p.push('/');
+                p.push_str(path);
+                p
+            };
+
+            items.push(TrayItem {
+                name: key.clone(),
+                icon_name: item.icon_name.clone().unwrap_or_default(),
+                title: item.title.clone().unwrap_or_else(|| item.id.clone()),
+                path: normalized_path,
+                service: service.to_string(),
+                menu_path: item
+                    .menu
+                    .as_ref()
+                    .map(|p| p.to_string())
+                    .unwrap_or_default(),
+            });
+        }
+
+        items
     }
 
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -86,31 +92,59 @@ impl SNIWatcher {
         let update_tx = self.update_tx.clone();
 
         while let Ok(event) = events.recv().await {
-            match event {
+            let changed = match event {
                 Event::Add(name, item) => {
                     let mut store = items_store.lock().unwrap();
-                    store.insert(name, (*item, None));
+                    store.insert(name, (*item, None)).is_none()
                 }
                 Event::Update(name, update) => {
                     let mut store = items_store.lock().unwrap();
                     if let Some((item, menu)) = store.get_mut(&name) {
                         match update {
-                            UpdateEvent::Status(s) => item.status = s,
-                            UpdateEvent::Title(t) => item.title = t,
-                            UpdateEvent::Icon { icon_name, .. } => item.icon_name = icon_name,
-                            UpdateEvent::Menu(m) => *menu = Some(m),
-                            _ => {}
+                            UpdateEvent::Status(s) => {
+                                if item.status != s {
+                                    item.status = s;
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            UpdateEvent::Title(t) => {
+                                if item.title != t {
+                                    item.title = t;
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            UpdateEvent::Icon { icon_name, .. } => {
+                                if item.icon_name != icon_name {
+                                    item.icon_name = icon_name;
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            UpdateEvent::Menu(m) => {
+                                *menu = Some(m);
+                                true
+                            }
+                            _ => false,
                         }
+                    } else {
+                        false
                     }
                 }
                 Event::Remove(name) => {
                     let mut store = items_store.lock().unwrap();
-                    store.remove(&name);
+                    store.remove(&name).is_some()
                 }
-            }
+            };
 
-            if let Some(tx) = &update_tx {
-                let _ = tx.try_send(());
+            if changed {
+                if let Some(tx) = &update_tx {
+                    let _ = tx.try_send(());
+                }
             }
         }
 
